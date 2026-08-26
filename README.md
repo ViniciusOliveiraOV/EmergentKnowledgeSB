@@ -68,6 +68,16 @@ closes.
 - **Markdown-first portability is intentional.** No required plugin, no
   binary state, no proprietary API. Validation is stdlib Python.
 
+## The machinery is not the product
+
+Everything above describes the control plane: the mechanisms that keep
+knowledge trustworthy. It is not the intended human experience. The
+long-term success criterion is whether a person's knowledge becomes simpler,
+more intelligible and more useful than the conversations it came from — a
+system can report zero validation errors and still fail that test. See
+[ADR-0006](_system/adr/adr-0006-human-cognitive-utility.md). The framing of
+this README is provisional for the same reason.
+
 ## Principles
 
 > Never summarize when you can integrate.

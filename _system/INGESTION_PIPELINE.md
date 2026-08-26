@@ -164,6 +164,12 @@ enters as immutable L0 first, always.
 > schema deliberately afterwards — never mid-ingestion, and never because one
 > source was impressive.
 
+Every ingestion is evaluated on **two independent dimensions** —
+epistemic integrity and Human Cognitive Utility ([[adr-0006-human-cognitive-utility]]).
+Zero validation errors is not success on its own; the second assessment is
+written down even when unflattering, and the first is never weakened to
+improve it.
+
 Human reviews every step:
 
 1. Ingest to `_sources/` as one `type: source` note (stage 1, by hand).
@@ -173,3 +179,7 @@ Human reviews every step:
 5. Write L1 notes. Commit separately from the source commit.
 6. Note what strained in the schema — in the review queue, not in
    `_system/`. **Decide on schema changes after the ingestion, not during.**
+7. Answer the Human Cognitive Utility questions
+   ([[adr-0006-human-cognitive-utility]]): was the result easier to think
+   with than the raw conversation, or only more correct? Record the honest
+   answer, including how much maintenance ceremony the ingestion cost.
