@@ -11,6 +11,9 @@
 
 **Experimental / Pre-alpha. Breaking changes expected.**
 
+
+<img width="600" height="603" alt="image" src="https://github.com/user-attachments/assets/716738f7-4c6c-4243-88cb-d7d7158d794e" />
+
 ---
 
 ## What this is
