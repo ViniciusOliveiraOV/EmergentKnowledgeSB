@@ -1,0 +1,16 @@
+# Obsidian per-machine UI state — not knowledge
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/plugins/*/data.json
+.trash/
+
+# Never commit credentials (see _system/SECURITY.md)
+.env
+*.key
+*.pem
+secrets/
+_system/local.*
+
+# Python
+__pycache__/
+*.pyc

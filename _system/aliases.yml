@@ -1,0 +1,20 @@
+# Canonicalizer support — hand-curated, deliberately small.
+# See _system/INGESTION_PIPELINE.md § Canonicalizer, resolution step 5.
+#
+# INSTANCE-SCOPED CONFIGURATION. This file ships empty on purpose: the pairs
+# that matter depend on which languages and vocabularies a given operator
+# actually works in. Add a pair only after you have seen it fragment YOUR
+# graph — a speculative table is noise the Canonicalizer has to trust.
+
+# Cross-language / cross-vocabulary equivalences applied during slug
+# normalization. Example shape (commented out — not active):
+#
+# equivalences:
+#   - [sociedade, society]
+#   - [conhecimento, knowledge]
+
+equivalences: []
+
+# Surface forms that must NOT be merged despite similarity.
+# Homonyms are the inverse of fragmentation and just as damaging.
+never_merge: []
