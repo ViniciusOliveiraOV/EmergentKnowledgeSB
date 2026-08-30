@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} · py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Unit tests
+        run: python -m pytest -q
+
+      - name: Validator selftest
+        run: python -m eksb.validate --selftest
+
+      - name: Bundled demo validates clean
+        run: python -m eksb.validate eksb/data/demo --warnings-are-errors
+
+  cli:
+    name: CLI · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    # a first-time user's machine: no config, no workspace, nothing inherited
+    env:
+      EKSB_CONFIG_DIR: ${{ github.workspace }}/.ci-eksb-config
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install from a built package, as a user would
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+
+      - name: Entry point
+        run: |
+          eksb --version
+          eksb --help
+
+      - name: Demo, then read it
+        run: |
+          eksb demo
+          eksb search "partitioning"
+          eksb get "Time-Range Partitioning"
+          eksb provenance "Time-Range Partitioning"
+          eksb attention
+          eksb validate
+          eksb doctor
+          eksb about
+
+      - name: Provenance shows who said what (EN)
+        shell: bash
+        run: |
+          eksb --lang en provenance "Time-Range Partitioning" > prov.txt
+          cat prov.txt
+          grep -q "you said it" prov.txt
+          grep -q "an assistant suggested it" prov.txt
+          grep -q "is a later version of" prov.txt
+
+      - name: Localization smoke test (pt-BR)
+        shell: bash
+        run: |
+          eksb config --set-lang pt-BR
+          eksb attention | tee att.txt
+          grep -q "Coisas que precisam da sua atenção" att.txt
+          eksb --lang en attention | grep -q "Things that need your attention"
+          eksb config | grep -q "Portugu"
+          eksb config --set-lang en
+
+      # a relative path, so this works identically under git-bash on Windows
+      # where runner.temp is a backslash path bash cannot use
+      - name: Workspace in a path with spaces and Unicode
+        shell: bash
+        run: |
+          eksb init "ws test/Meu Espaço EKSB ✓"
+          eksb doctor "ws test/Meu Espaço EKSB ✓"
+          eksb validate "ws test/Meu Espaço EKSB ✓"
+
+      - name: Writing round-trip
+        shell: bash
+        run: |
+          W="ws test/Meu Espaço EKSB ✓"
+          eksb add --type decision "Use Postgres" -w "$W"
+          printf 'Me: shard?\nAssistant: maybe.\n' > chat.md
+          eksb save chat.md --kind chatgpt -w "$W"
+          eksb validate "$W"
+          eksb search Postgres -w "$W" | grep -q "Use Postgres"
+
+      - name: Editing raw history is detected
+        shell: bash
+        run: |
+          W="ws test/Meu Espaço EKSB ✓"
+          python - "$W" <<'PY'
+          import pathlib, sys
+          p = next((pathlib.Path(sys.argv[1]) / "_sources").glob("chat*.md"))
+          p.write_text(p.read_text(encoding="utf-8").replace("maybe", "yes"),
+                       encoding="utf-8")
+          PY
+          eksb validate "$W" > raw.txt 2>&1 && { echo "expected a mismatch"; exit 1; }
+          cat raw.txt
+          grep -q "content_hash mismatch" raw.txt
+
+      - name: Missing workspace is a sentence, not a traceback
+        shell: bash
+        run: |
+          eksb search anything -w "no such folder" > err.txt 2>&1 && exit 1
+          cat err.txt
+          grep -q "There is no EKSB workspace" err.txt
+          ! grep -q "Traceback" err.txt
+
+      - name: Runs with NO_COLOR
+        env:
+          NO_COLOR: "1"
+        run: eksb doctor
