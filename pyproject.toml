@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eksb"
+version = "0.1.0a1"
+description = "Keep decisions, ideas and sources connected — in plain Markdown, on your own machine."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "EmergentKnowledgeSB contributors" }]
+keywords = ["knowledge-management", "provenance", "markdown", "second-brain", "notes"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Text Processing :: Markup :: Markdown",
+]
+dependencies = ["PyYAML>=6.0"]
+
+[project.urls]
+Homepage = "https://github.com/ViniciusOliveiraOV/EmergentKnowledgeSB"
+Documentation = "https://github.com/ViniciusOliveiraOV/EmergentKnowledgeSB/tree/main/docs"
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+eksb = "eksb.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["eksb*"]
+
+[tool.setuptools.package-data]
+eksb = ["data/**/*", "data/**/.gitkeep"]
