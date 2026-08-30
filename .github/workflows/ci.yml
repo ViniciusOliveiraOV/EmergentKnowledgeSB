@@ -141,3 +141,55 @@ jobs:
         env:
           NO_COLOR: "1"
         run: eksb doctor
+
+      - name: Project ingestion is incremental and keeps history
+        shell: bash
+        run: |
+          W="ws test/Meu Espaço EKSB ✓"
+          mkdir -p "proj/docs" "proj/node_modules/dep"
+          printf '# Atlas\n\nRead latency is the constraint.\n' > proj/README.md
+          printf '# Decisions\n\nAdopted time-range partitioning.\n' > proj/docs/d.md
+          printf 'print(1)\n' > proj/main.py
+          printf 'junk\n' > proj/node_modules/dep/readme.md
+
+          eksb ingest proj --name Atlas -w "$W" | tee ing1.txt
+          grep -q "Indexed Atlas" ing1.txt
+          eksb ingest proj -w "$W" | tee ing2.txt
+          grep -q "already up to date" ing2.txt
+          test "$(ls "$W/_sources" | wc -l)" = "3"   # 2 indexed + the earlier chat
+
+          printf '# Atlas\n\nNow with retention windows.\n' > proj/README.md
+          eksb ingest proj -w "$W" | grep -q "changed since last time"
+          test "$(ls "$W/_sources" | wc -l)" = "4"   # the old version was kept
+          eksb validate "$W"
+          eksb projects -w "$W" | grep -q "indexed"
+
+      - name: MCP server answers a real client session
+        shell: bash
+        run: |
+          W="ws test/Meu Espaço EKSB ✓"
+          {
+            printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","clientInfo":{"name":"ci"}}}'
+            printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+            printf '%s\n' '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"eksb_search","arguments":{"query":"latency"}}}'
+          } | eksb mcp -w "$W" > mcp.txt
+          cat mcp.txt
+          test "$(wc -l < mcp.txt)" = "3"
+          grep -q '"name": "eksb_submit_candidate"' mcp.txt
+          grep -q 'eksb_provenance' mcp.txt
+
+      - name: An agent cannot record its guess as the user's position
+        shell: bash
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"eksb_submit_candidate","arguments":{"title":"Nope","claims":[{"text":"x","epistemic":"user_position"}]}}}' \
+            | eksb mcp -w "ws test/Meu Espaço EKSB ✓" > guard.txt
+          cat guard.txt
+          grep -q "REJECTED" guard.txt
+          grep -q "may not assert user_position" guard.txt
+
+      - name: Connect prints a usable client configuration
+        shell: bash
+        run: |
+          eksb connect --json -w "ws test/Meu Espaço EKSB ✓" > cfg.json
+          cat cfg.json
+          python -c "import json,sys; c=json.load(open('cfg.json'))['mcpServers']['eksb']; assert c['args'][:3]==['-m','eksb','mcp'], c"
