@@ -1,208 +1,121 @@
-# EmergentKnowledgeSB
+# EKSB
 
-> **An agent-native, provenance-preserving framework for emergent personal
-> knowledge systems.**
+**Keep decisions, ideas and sources connected — in plain Markdown, on your own machine.**
 
-`SB` = Second Brain.
-
-![status](https://img.shields.io/badge/status-experimental%20%2F%20pre--alpha-orange)
-![version](https://img.shields.io/badge/version-0.0.1--prealpha-blue)
+![status](https://img.shields.io/badge/status-alpha-orange)
+![version](https://img.shields.io/badge/version-0.1.0--alpha-blue)
 ![license](https://img.shields.io/badge/license-Apache--2.0-green)
+![python](https://img.shields.io/badge/python-3.11%2B-blue)
 
-**Experimental / Pre-alpha. Breaking changes expected.**
+## Why?
 
+Your AI conversations and project history should not disappear when the chat
+ends. After a few weeks you can no longer remember why you decided something,
+where an idea came from, or which of two contradictory suggestions you
+actually agreed with — and the next assistant you talk to knows none of it.
 
-<img width="507" height="460" alt="image" src="https://github.com/user-attachments/assets/0df95f86-83a9-448b-a72c-9d4604963398" />
+EKSB keeps that history as ordinary Markdown files, and records, for every
+claim, **who said it**: you, an assistant, or a source. So a model's guess
+never quietly becomes something you believe you always thought.
 
+## Try it in 2 minutes
 
----
+Requires **Python 3.11 or newer**. Nothing else.
 
-## What this is
+**Windows** (PowerShell):
 
-This is **not** an Obsidian template.
-
-Obsidian is the current reference interface and storage environment. What the
-framework actually consists of is Markdown files, YAML frontmatter, stable
-IDs, and a protocol for how knowledge is allowed to change. Those primitives
-are meant to outlive any particular editor, and the knowledge must be able to
-leave — for another frontend, a graph database, or an agent system that does
-not exist yet.
-
-The subject of the framework is not a folder structure. It is a protocol:
-
-```text
-RAW HISTORY
-→ CANONICAL KNOWLEDGE
-→ RELATIONS
-→ SYNTHESIS
-→ OPERATIONAL STATE
-→ NEW QUESTIONS
+```powershell
+python -m pip install git+https://github.com/ViniciusOliveiraOV/EmergentKnowledgeSB
+eksb
 ```
 
-Raw material is preserved immutably. Durable entities are extracted from it
-and canonicalized so the same idea stays one node no matter how many times it
-is discussed. Typed relations connect them. Higher-order documents are
-assembled from those. Operational state is derived, never authored. The gaps
-that surface become new questions, which drive new material — and the loop
-closes.
+**Linux / macOS**:
 
-## What the framework asserts
+```bash
+python3 -m pip install git+https://github.com/ViniciusOliveiraOV/EmergentKnowledgeSB
+eksb
+```
 
-- **The knowledge base is canonical.** Not any model's proprietary memory. If
-  a client's memory disagrees with the vault, the vault wins.
-- **LLMs are replaceable cognitive engines.** They operate over the source of
-  truth; they are not the source of truth. Swapping the model must never
-  threaten the knowledge.
-- **Provenance is mandatory.** Every durable claim traces to its origin.
-  Fabricating a source, hash, date or location is the worst available failure,
-  because it survives for years looking correct.
-- **Agent inferences do not silently become user beliefs.** Six epistemic
-  states are tracked explicitly. Promotion between them is a human act that an
-  agent may propose and may never perform.
-- **Historical evolution is never overwritten.** A changed position is
-  appended, dated and linked; the prior position stays reachable. It must
-  remain possible to reconstruct what was believed, and when it changed.
-- **Autonomy is bounded by explicit permissions.** READ and SEARCH are free,
-  CREATE is conditional, PATCH is append-only, RENAME and MERGE need review,
-  DELETE is human-only, always.
-- **Markdown-first portability is intentional.** No required plugin, no
-  binary state, no proprietary API. Validation is stdlib Python.
+`eksb` asks for a language (English or Português), explains itself in three
+sentences, and offers you a demo workspace. The demo is a small fictional
+engineering discussion, already turned into knowledge:
 
-## The machinery is not the product
+```
+eksb demo
+eksb search "partitioning"
+eksb provenance "Time-Range Partitioning"
+eksb attention
+```
 
-Everything above describes the control plane: the mechanisms that keep
-knowledge trustworthy. It is not the intended human experience. The
-long-term success criterion is whether a person's knowledge becomes simpler,
-more intelligible and more useful than the conversations it came from — a
-system can report zero validation errors and still fail that test. See
-[ADR-0006](_system/adr/adr-0006-human-cognitive-utility.md). The framing of
-this README is provisional for the same reason.
+That last pair is the point. `provenance` shows a claim's origin and who
+asserted it; `attention` lists the open questions, the unverified outside
+claims, and the positions you have changed.
 
-## Principles
+## What happens next?
 
-> Never summarize when you can integrate.
-> Never duplicate when you can link.
-> Never overwrite history when you can append evolution.
+Run `eksb` with no arguments for a menu:
 
-> Provenance over compression.
-> Historical fidelity over superficial cleanliness.
-> Canonicalization over duplication.
-> Human interpretability over cleverness.
-> Safety over autonomy.
-
-## Layers
-
-| Layer | Content | Mutability |
-|---|---|---|
-| **L0** | raw sources — conversations, papers, imports | append-only, hash-verified |
-| **L1** | atomic knowledge — canonical entities | evolves, never overwritten |
-| **L2** | synthetic knowledge — projects, MOCs, strategies | assembled from L1 |
-| **L3** | operational state — dashboards, queues | regenerable |
-
-## Epistemic status
-
-Every claim carries one of six states, as an inline tag so that plain search
-and Obsidian's tag pane both navigate them with no plugin:
-
-| State | Means |
+| | |
 |---|---|
-| `user_position` | the human asserted or endorsed it |
-| `assistant_hypothesis` | a model proposed it, unendorsed |
-| `external_fact` | verifiable outside claim, source recorded |
-| `source_claim` | a source asserts it; truth not assessed |
-| `inference` | derived by reasoning over existing content |
-| `open_question` | unresolved |
+| Search my knowledge | find notes by word, title or alias |
+| Add something | write a note, or keep a conversation you already have |
+| What needs my attention? | open questions, unconfirmed suggestions, changed positions |
+| Check where something came from | the source, the date, and who said it |
+| Check my workspace | broken links, schema problems |
+| About this installation | where your data is and what runs |
 
-The failure this prevents — a model's guess becoming, months later, something
-you believe you always thought — is the single worst thing a system like this
-could do to its owner.
+Or use the commands directly — `eksb --help` lists them, and
+[docs/cli.md](docs/cli.md) documents each one.
 
-## Repository layout
+## What it can help with
 
-```text
-_system/           architecture, validator, ADRs, generic fixture
-  adr/             why the architecture is the way it is
-  fixtures/generic synthetic fixture + expected output
-_templates/        frontmatter schemas
-_sources/          L0 — raw material
-concepts/          L1 — concepts, principles, questions, people, technologies
-references/        L1 — books, papers
-decisions/         L1 — decisions
-projects/          L2 — projects, roadmaps, maps of content
-dashboards/        L3 — operational state
-```
+- remembering **why** you decided something, and what you turned down
+- finding **where** a piece of information came from
+- keeping one idea as one note, no matter how many chats it appeared in
+- separating what *you* think from what a model *suggested*
+- giving an AI agent real project history instead of a summary
 
-## Documentation
+## Your data
+
+Your workspace is a folder of Markdown and YAML you can read, edit, grep,
+back up and move. EKSB is a command you run: **nothing runs in the
+background, nothing is uploaded, no AI model is called, and there is no
+telemetry.** Run `eksb about` and it will tell you the same thing with your
+actual paths filled in.
+
+Obsidian, MCP and other agent integrations are **optional** and off by
+default. No API key is needed to use any of this.
+
+## Languages
+
+The CLI speaks **English** and **Português (Brasil)**. Pick one on first run,
+change it any time with `eksb config --set-lang pt-BR`.
+
+Documentation is in English.
+
+## Status
+
+**v0.1.0-alpha.** Usable, and the schema may still change between alpha
+releases. Extraction from a conversation is still a manual, human-reviewed
+step — see [docs/ingestion.md](docs/ingestion.md).
+
+## Want the technical details?
 
 | Doc | Answers |
 |---|---|
-| [ARCHITECTURE](_system/ARCHITECTURE.md) | Layers, identity, relations, write paths |
-| [ONTOLOGY](_system/ONTOLOGY.md) | Types, schema, epistemic status, language, time |
-| [PROVENANCE](_system/PROVENANCE.md) | How claims trace to origin |
-| [AGENT_RULES](_system/AGENT_RULES.md) | What an agent may do unattended |
-| [INGESTION_PIPELINE](_system/INGESTION_PIPELINE.md) | How raw material becomes knowledge |
-| [SECURITY](_system/SECURITY.md) | Permissions, network, untrusted input |
-| [ADRs](_system/adr/) | The reasoning behind each decision |
-
-Agents entering the repository start at [AGENTS.md](AGENTS.md).
-
-Documentation uses `[[wikilinks]]` in some internal cross-references, which
-render as literal text on GitHub. Every document is written to stay readable
-without them.
-
-## Validating
-
-```bash
-python3 _system/validate.py             # schema integrity across the vault
-python3 _system/validate.py --selftest  # the validator's own regression checks
-```
-
-Requires Python 3 and PyYAML. Nothing else.
-
-Seven warnings are expected: the fixture's notes deliberately live outside
-their type's folder. **The pass criterion is zero errors, not zero warnings.**
-
-## CORE vs INSTANCE
-
-The framework (**CORE**) is generic and carries no assumptions about any
-particular person. A vault built on it (**INSTANCE**) holds one person's
-concepts, projects, positions, sources and decisions. Files declare which side
-they belong to with `track: core` or `track: instance`.
-
-**Personal material must never contaminate the core.** This repository
-contains only `track: core` files. See
-[ADR-0005](_system/adr/adr-0005-core-instance-separation.md).
-
-The framework is developed by dogfooding it in a separate private instance:
-
-```text
-private instance
-        ↓ dogfooding
-finds architectural improvements
-        ↓
-EmergentKnowledgeSB upstream
-```
-
-Vendoring and version pinning between the two are deliberately not implemented
-yet.
-
-## Maturity
-
-**Experimental. Pre-alpha. Breaking changes expected.**
-
-- **No real corpus has been ingested.** Every statement about pipeline
-  behaviour is a design intention, not an observation.
-- The schema is **not empirically validated** — it has been tested only
-  against the synthetic fixture in this repository.
-- Canonicalization, contradiction detection, temporal-evolution handling and
-  synthesis are **specified, not implemented**. `_system/validate.py` is the
-  only executable component.
-- **Not recommended as a stable template.** Adopting it now means adopting a
-  schema that will change.
-
-Maturation is gated on evidence, not dates: roughly three to five real manual
-ingestions in a private instance before the ontology is revised and
-`v0.1.0-alpha` is prepared.
+| [Getting started](docs/getting-started.md) | Install, first workspace, first week |
+| [CLI reference](docs/cli.md) | Every command and flag |
+| [Workspace format](docs/workspace-format.md) | What is in the folder, and why |
+| [Epistemic model](docs/epistemic-model.md) | Types, schema, the six statuses, time |
+| [Provenance](docs/provenance.md) | How claims trace to their origin |
+| [Relations](docs/relations.md) | The twelve link types and when to use each |
+| [Architecture](docs/architecture.md) | Layers, identity, write paths |
+| [Agent rules](docs/agent-rules.md) | What an AI agent may and may not do |
+| [Ingestion](docs/ingestion.md) | How raw material becomes knowledge |
+| [Security](docs/security.md) | Permissions, network, untrusted input |
+| [Integrations](docs/integrations/) | Obsidian, and what is not built yet |
+| [ADRs](docs/adr/) | Why each decision was made |
+| [Contributing](CONTRIBUTING.md) | Setup, tests, boundaries |
 
 ## License
 
