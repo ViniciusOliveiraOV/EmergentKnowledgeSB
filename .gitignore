@@ -14,3 +14,13 @@ _system/local.*
 # Python
 __pycache__/
 *.pyc
+
+# EKSB app config (never inside a workspace)
+.ci-eksb-config/
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+.venv/
+.pytest_cache/
