@@ -4,6 +4,7 @@ type: doc
 track: core
 id: doc-20260826-ingestion
 created: 2026-08-26
+updated: 2026-08-26
 title: Ingestion Pipeline
 ---
 
@@ -144,16 +145,31 @@ delete and rebuild — that is the test of whether a dashboard is really L3.
 
 ## Phase 1 — manual, review-driven
 
-**Roughly three real manual ingestions before deciding what belongs in
-deterministic code, what belongs in LLM reasoning, and what belongs in
-future Hermes orchestration.** Automate a stage only after doing it by hand
-three times.
+**Three real manual ingestions before deciding what belongs in deterministic
+code, what belongs in LLM reasoning, and what belongs in future Hermes
+orchestration.** Automate a stage only after doing it by hand three times.
 
-The first corpus is an exported ChatGPT conversation — likely large. Treat it
-as a **torture test** for provenance, epistemic status, canonicalization,
+The three corpora are chosen to exercise **different knowledge modes**, and
+are ingested **separately and in order** — each completing its full review
+cycle before the next begins:
+
+| Ingestion | Knowledge mode under test |
+|---|---|
+| 1A | strategic / philosophical / existential — a long conversational corpus |
+| 1B | operational / software / professional — real project material |
+| 1C | operational / software / professional, plus cross-project reconciliation |
+
+1A is a **torture test** for provenance, epistemic status, canonicalization,
 temporal evolution, contradictions, refinements, decisions, user positions,
-assistant hypotheses, external facts, emerging concepts, and relations. It
+assistant hypotheses, external facts, emerging concepts and relations. It
 enters as immutable L0 first, always.
+
+1B introduces a second, unrelated knowledge domain — architecture, technical
+decisions, requirements, bugs, tickets, project history, business context,
+tasks, technologies, unresolved technical questions. 1C repeats that domain
+against a vault that already holds one like it, and is therefore the first
+real test of whether the Canonicalizer reconciles across projects instead of
+silently duplicating them.
 
 > **The corpus tests the schema. The corpus does not become the schema.**
 >
@@ -164,17 +180,37 @@ enters as immutable L0 first, always.
 > schema deliberately afterwards — never mid-ingestion, and never because one
 > source was impressive.
 
+### Entity independence
+
+Each corpus constructs its own subject as an **independent canonical entity**
+first. Where one project is strategically broader than another, that breadth
+is expressed as **relations**, never as containment:
+
+> **Identity remains local; strategic significance is relational.**
+
+A broader effort must not become a universal parent that absorbs every other
+entity. Each project keeps its own history, architecture, goals, decisions,
+business context, problems and state. Relations between projects are
+considered only *after* canonicalization and reconciliation, and only where
+source evidence supports them.
+
+**Folder rule.** `projects/` is flat, as [[ONTOLOGY]] already requires. A
+nested folder tree must never stand in for a semantic relationship.
+
 Every ingestion is evaluated on **two independent dimensions** —
 epistemic integrity and Human Cognitive Utility ([[adr-0006-human-cognitive-utility]]).
 Zero validation errors is not success on its own; the second assessment is
 written down even when unflattering, and the first is never weakened to
 improve it.
 
-Human reviews every step:
+### Per-ingestion review cycle
+
+Run once per corpus, start to finish, before the next corpus begins. Human
+reviews every step:
 
 1. Ingest to `_sources/` as one `type: source` note (stage 1, by hand).
 2. Extract 5–15 candidates, no more (stage 2, by hand).
-3. Canonicalize against an empty vault — record which alias rules fire.
+3. Canonicalize against current vault state — record which alias rules fire.
 4. Produce a written merge plan; the human approves it line by line.
 5. Write L1 notes. Commit separately from the source commit.
 6. Note what strained in the schema — in the review queue, not in
@@ -183,3 +219,34 @@ Human reviews every step:
    ([[adr-0006-human-cognitive-utility]]): was the result easier to think
    with than the raw conversation, or only more correct? Record the honest
    answer, including how much maintenance ceremony the ingestion cost.
+
+### Cross-project synthesis — after 1C only
+
+Only once 1A, 1B and 1C have each completed the cycle above. The subjects
+remain distinct entities; the graph may then surface evidence-supported
+relations among them — competencies recurring across projects, activities
+that advance a broader goal, reusable technical assets, decisions that reveal
+capability, activities with weak strategic alignment, and recurring
+technologies, architectural patterns or business problems.
+
+**Do not pre-encode the answers.** Let relations emerge from evidence, use
+the closed vocabulary in [[ARCHITECTURE]], and prefer the most specific true
+relation. "The evidence does not support one" is a valid result. If an
+important recurring relationship cannot be expressed with the existing set,
+record **schema strain** in the review queue rather than extending the
+ontology mid-ingestion.
+
+### Evaluation after the third ingestion
+
+**Epistemic integrity** — did the system preserve provenance, attribution,
+uncertainty, temporal change, canonical identities, and entity independence?
+
+**Human Cognitive Utility** ([[adr-0006-human-cognitive-utility]]) — can the
+human now see what each project currently is, how they relate, which skills
+are accumulating, what strategic progress exists, what remains unresolved,
+which patterns cross project boundaries, and which useful relationships were
+not visible in the raw source material?
+
+> The first real sign the system works is not valid YAML. It is useful
+> structure emerging across previously separate parts of the operator's
+> working and intellectual life.
