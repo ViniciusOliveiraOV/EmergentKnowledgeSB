@@ -295,7 +295,8 @@ def slugify(title: str) -> str:
 def safe_filename(title: str) -> str:
     """Keep the human title in the filename, minus what Windows forbids."""
     s = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", title).strip(". ")
-    return (s[:80] or "Untitled") + ".md"
+    s = s[:80] or "Untitled"
+    return s if s.lower().endswith(".md") else s + ".md"
 
 
 def new_id(type_: str, title: str, when: date | None = None) -> str:

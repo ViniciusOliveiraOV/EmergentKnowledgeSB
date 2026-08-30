@@ -11,14 +11,27 @@ STRINGS: dict[str, dict[str, str]] = {
 
 "en": {
     # -- framing ------------------------------------------------------
-    "tagline": "Your knowledge, with memory.",
+    "product.name": "Emergent Knowledge Second Brain",
+    "tagline": "Your knowledge should outlive the chat - and the model.",
     "pitch": (
-        "Your AI conversations and project history should not disappear when\n"
-        "the chat ends.\n\n"
-        "EKSB keeps decisions, ideas and sources connected — so you can find\n"
-        "what you know, and where it came from. Everything is plain Markdown\n"
-        "files on your own machine."
+        "Your AI history should become reusable knowledge, not disposable\n"
+        "context.\n\n"
+        "EKSB keeps your decisions, sources and project history in plain\n"
+        "Markdown that belongs to you — not to one chat, one model or one\n"
+        "provider. An AI assistant can then look up the part it needs,\n"
+        "instead of you re-explaining the project every time."
     ),
+    "first.journey": (
+        "Try the demo  ->  add a project  ->  connect an AI assistant\n"
+        "->  work normally. EKSB becomes the memory your assistant reads from."
+    ),
+    "first.addproject": "Add a project folder now?",
+    "first.connect.hint": (
+        "EKSB is most useful when an AI assistant can read it. That is\n"
+        "optional, needs no API key, and can wait."
+    ),
+    "first.connect.now": "Show me how to connect one?",
+    "arg.path": "<folder>",
 
     # -- first run ----------------------------------------------------
     "lang.choose": "Choose a language / Escolha um idioma:",
@@ -35,12 +48,79 @@ STRINGS: dict[str, dict[str, str]] = {
 
     # -- main menu ----------------------------------------------------
     "menu.title": "What would you like to do?",
-    "menu.search": "Search my knowledge",
+    "menu.continue": "Where things stand",
+    "menu.search": "Search my history",
+    "menu.project": "Projects",
+    "menu.connect": "Connect an AI assistant",
     "menu.add": "Add something",
     "menu.attention": "What needs my attention?",
     "menu.provenance": "Check where something came from",
     "menu.health": "Check my workspace",
     "menu.about": "About this installation",
+
+    # -- where things stand ------------------------------------------
+    "stat.title": "Where things stand",
+    "stat.projects": "Projects",
+    "stat.items": "Knowledge",
+    "stat.ai": "AI assistants",
+    "stat.noai": "none connected — optional, see \"Connect an AI assistant\"",
+    "stat.recent": "Most recently touched",
+    "stat.pending": "Waiting on you ({n})",
+    "stat.seeall": "\"What needs my attention?\" has the full list.",
+
+    # -- projects and ingestion --------------------------------------
+    "proj.title": "Projects",
+    "proj.what": "Projects",
+    "proj.list": "List my projects",
+    "proj.add": "Add a project folder",
+    "proj.none": "No projects yet.",
+    "proj.hint": "Add one with:  eksb ingest <folder>",
+    "proj.counts": "{indexed} file(s) indexed · {integrated} note(s) written from them",
+    "proj.levels": ("registered = EKSB knows where it is · indexed = its text is "
+                    "searchable · integrated = knowledge written from it"),
+    "level.registered": "registered",
+    "level.indexed": "indexed",
+    "level.integrated": "integrated",
+    "ing.path": "Path to the project folder",
+    "ing.name": "What should this project be called?",
+    "ing.done": "Indexed {project}",
+    "ing.added": "newly indexed",
+    "ing.updated": "changed since last time (earlier versions kept)",
+    "ing.unchanged": "already up to date",
+    "ing.skipped": "skipped",
+    "ing.truncated": "Stopped at {n} files. Raise it with --max-files.",
+    "ing.indexed_not_understood": (
+        "Indexed, not understood. The text is now searchable and citable —\n"
+        "turning it into decisions and concepts is the next step, and it takes\n"
+        "judgment: yours, or a connected assistant's."
+    ),
+    "ing.next": "Try:  eksb search <word>   ·   eksb connect",
+    "ing.nodir": "There is no folder at {path}.",
+    "ing.inside": "{path} is inside your workspace. Point at the project itself.",
+    "skip.ignored": "ignored (build, cache, dependencies)",
+    "skip.not-text": "not text",
+    "skip.too-big": "too large",
+    "skip.unreadable": "unreadable",
+    "skip.over-limit": "over the file limit",
+
+    # -- connecting an assistant --------------------------------------
+    "conn.title": "Connect an AI assistant",
+    "conn.what": (
+        "EKSB can act as memory for an AI assistant that speaks MCP. The\n"
+        "assistant then searches your history and adds to it, instead of you\n"
+        "pasting context into every conversation.\n\n"
+        "Nothing runs until the assistant starts it, and no API key is needed\n"
+        "by EKSB itself."
+    ),
+    "conn.detected": "Clients found on this machine:",
+    "conn.wired": "already configured",
+    "conn.notwired": "not configured yet",
+    "conn.nodetect": "No MCP client detected. The configuration below works for any.",
+    "conn.howto": "Add this to your client's MCP configuration:",
+    "conn.where": "Claude Code:  claude mcp add-json eksb '<the object above>'",
+    "conn.restart": "Other clients: paste it into their MCP config file, then restart.",
+    "conn.docs": "Full instructions: docs/integrations/mcp.md",
+    "mcp.serving": "EKSB MCP server on {path} — speaking JSON-RPC on stdin/stdout.",
     "menu.settings": "Settings",
     "menu.learn": "Learn more",
     "menu.exit": "Exit",
@@ -141,6 +221,9 @@ STRINGS: dict[str, dict[str, str]] = {
     "doc.config": "Configuration",
     "doc.optional": "Optional, not required:",
     "doc.obsidian": "Obsidian",
+    "doc.mcp": "AI assistants (MCP)",
+    "doc.project": "Project",
+    "doc.available": "client found, not configured",
     "doc.detected": "detected",
     "doc.notdetected": "not detected",
     "doc.ok": "OK",
@@ -167,7 +250,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "about.integrations": "Optional integrations",
     "about.obsidian.on": "Obsidian is installed. EKSB does not use it or need it — your workspace is plain Markdown, so Obsidian can open it if you want.",
     "about.obsidian.off": "Obsidian is not installed. EKSB does not need it.",
-    "about.agents": "AI agents (MCP): not implemented in this version.",
+    "about.agents": ("AI assistants (MCP): available, off until you configure a client. The server runs only while that client is running, started by it, over its own input and output — no port, no daemon."),
     "about.stop": "To remove EKSB: uninstall the package and delete the two folders above.",
 
     # -- settings -----------------------------------------------------
@@ -209,14 +292,28 @@ STRINGS: dict[str, dict[str, str]] = {
 },
 
 "pt-BR": {
-    "tagline": "Seu conhecimento, com memória.",
+    "product.name": "Emergent Knowledge Second Brain",
+    "tagline": "Seu conhecimento deve sobreviver à conversa - e ao modelo.",
     "pitch": (
-        "Suas conversas com IA e a história dos seus projetos não deveriam\n"
-        "desaparecer quando a conversa termina.\n\n"
-        "O EKSB mantém decisões, ideias e fontes conectadas — para você\n"
-        "encontrar o que sabe e de onde aquilo veio. Tudo são arquivos\n"
-        "Markdown comuns, na sua própria máquina."
+        "Seu histórico com IA deveria virar conhecimento reutilizável, não\n"
+        "contexto descartável.\n\n"
+        "O EKSB guarda suas decisões, fontes e a história dos seus projetos em\n"
+        "Markdown comum, que pertence a você — não a uma conversa, um modelo\n"
+        "ou um fornecedor. Assim um assistente de IA consulta só a parte de que\n"
+        "precisa, em vez de você reexplicar o projeto toda vez."
     ),
+    "first.journey": (
+        "Testar a demonstração  ->  adicionar um projeto  ->  conectar um\n"
+        "assistente de IA  ->  trabalhar normalmente. O EKSB vira a memória\n"
+        "que o seu assistente consulta."
+    ),
+    "first.addproject": "Adicionar uma pasta de projeto agora?",
+    "first.connect.hint": (
+        "O EKSB rende mais quando um assistente de IA consegue lê-lo. Isso é\n"
+        "opcional, não exige chave de API, e pode ficar para depois."
+    ),
+    "first.connect.now": "Quer ver como conectar um?",
+    "arg.path": "<pasta>",
 
     "lang.choose": "Choose a language / Escolha um idioma:",
     "lang.saved": "Idioma definido: {lang}.",
@@ -231,12 +328,76 @@ STRINGS: dict[str, dict[str, str]] = {
     "arg.word": "<palavra>",
 
     "menu.title": "O que você quer fazer?",
-    "menu.search": "Buscar no meu conhecimento",
+    "menu.continue": "Como as coisas estão",
+    "menu.search": "Buscar no meu histórico",
+    "menu.project": "Projetos",
+    "menu.connect": "Conectar um assistente de IA",
     "menu.add": "Adicionar algo",
     "menu.attention": "O que precisa da minha atenção?",
     "menu.provenance": "Ver de onde veio uma informação",
     "menu.health": "Verificar meu workspace",
     "menu.about": "Sobre esta instalação",
+
+    "stat.title": "Como as coisas estão",
+    "stat.projects": "Projetos",
+    "stat.items": "Conhecimento",
+    "stat.ai": "Assistentes de IA",
+    "stat.noai": "nenhum conectado — opcional, veja \"Conectar um assistente de IA\"",
+    "stat.recent": "Mexido mais recentemente",
+    "stat.pending": "Esperando por você ({n})",
+    "stat.seeall": "\"O que precisa da minha atenção?\" tem a lista completa.",
+
+    "proj.title": "Projetos",
+    "proj.what": "Projetos",
+    "proj.list": "Listar meus projetos",
+    "proj.add": "Adicionar uma pasta de projeto",
+    "proj.none": "Nenhum projeto ainda.",
+    "proj.hint": "Adicione um com:  eksb ingest <pasta>",
+    "proj.counts": "{indexed} arquivo(s) indexado(s) · {integrated} nota(s) escrita(s) a partir deles",
+    "proj.levels": ("registrado = o EKSB sabe onde fica · indexado = o texto é "
+                    "pesquisável · integrado = há conhecimento escrito a partir dele"),
+    "level.registered": "registrado",
+    "level.indexed": "indexado",
+    "level.integrated": "integrado",
+    "ing.path": "Caminho da pasta do projeto",
+    "ing.name": "Como este projeto deve se chamar?",
+    "ing.done": "Indexado: {project}",
+    "ing.added": "indexado(s) agora",
+    "ing.updated": "mudou desde a última vez (versões anteriores mantidas)",
+    "ing.unchanged": "já estava em dia",
+    "ing.skipped": "ignorado(s)",
+    "ing.truncated": "Parei em {n} arquivos. Aumente com --max-files.",
+    "ing.indexed_not_understood": (
+        "Indexado, não compreendido. O texto agora é pesquisável e citável —\n"
+        "transformá-lo em decisões e conceitos é o passo seguinte, e exige\n"
+        "julgamento: o seu, ou o de um assistente conectado."
+    ),
+    "ing.next": "Experimente:  eksb search <palavra>   ·   eksb connect",
+    "ing.nodir": "Não existe nenhuma pasta em {path}.",
+    "ing.inside": "{path} está dentro do seu workspace. Aponte para o projeto em si.",
+    "skip.ignored": "ignorados (build, cache, dependências)",
+    "skip.not-text": "não são texto",
+    "skip.too-big": "grandes demais",
+    "skip.unreadable": "ilegíveis",
+    "skip.over-limit": "acima do limite de arquivos",
+
+    "conn.title": "Conectar um assistente de IA",
+    "conn.what": (
+        "O EKSB pode servir de memória para um assistente de IA que fale MCP.\n"
+        "O assistente passa a consultar o seu histórico e a acrescentar a ele,\n"
+        "em vez de você colar contexto em toda conversa.\n\n"
+        "Nada roda até o assistente iniciar, e o próprio EKSB não precisa de\n"
+        "chave de API."
+    ),
+    "conn.detected": "Clientes encontrados nesta máquina:",
+    "conn.wired": "já configurado",
+    "conn.notwired": "ainda não configurado",
+    "conn.nodetect": "Nenhum cliente MCP detectado. A configuração abaixo serve para qualquer um.",
+    "conn.howto": "Adicione isto à configuração MCP do seu cliente:",
+    "conn.where": "Claude Code:  claude mcp add-json eksb '<o objeto acima>'",
+    "conn.restart": "Outros clientes: cole no arquivo de configuração MCP e reinicie.",
+    "conn.docs": "Instruções completas: docs/integrations/mcp.md",
+    "mcp.serving": "Servidor MCP do EKSB em {path} — falando JSON-RPC pela entrada/saída padrão.",
     "menu.settings": "Configurações",
     "menu.learn": "Saiba mais",
     "menu.exit": "Sair",
@@ -330,6 +491,9 @@ STRINGS: dict[str, dict[str, str]] = {
     "doc.config": "Configuração",
     "doc.optional": "Opcional, não obrigatório:",
     "doc.obsidian": "Obsidian",
+    "doc.mcp": "Assistentes de IA (MCP)",
+    "doc.project": "Projeto",
+    "doc.available": "cliente encontrado, não configurado",
     "doc.detected": "detectado",
     "doc.notdetected": "não detectado",
     "doc.ok": "OK",
@@ -355,7 +519,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "about.integrations": "Integrações opcionais",
     "about.obsidian.on": "O Obsidian está instalado. O EKSB não o usa nem precisa dele — seu workspace é Markdown comum, então o Obsidian pode abri-lo se você quiser.",
     "about.obsidian.off": "O Obsidian não está instalado. O EKSB não precisa dele.",
-    "about.agents": "Agentes de IA (MCP): não implementado nesta versão.",
+    "about.agents": ("Assistentes de IA (MCP): disponível, desligado até você configurar um cliente. O servidor só roda enquanto esse cliente roda, iniciado por ele, pela entrada e saída dele — sem porta, sem daemon."),
     "about.stop": "Para remover o EKSB: desinstale o pacote e apague as duas pastas acima.",
 
     "set.title": "Configurações",

@@ -5,17 +5,19 @@ Cross-platform by construction — pathlib, no shell-outs, no POSIX assumptions.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import platform
 import shutil
 import sys
 from pathlib import Path
 
-from . import __version__, config, workspace as ws
+from . import __version__, config, ingest, workspace as ws
 from .i18n import LANGUAGES, get_lang, set_lang, t
 from .validate import validate
 
 DEBUG = False
+VERSION_LABEL = "0.1.0-alpha"
 
 # -- terminal ------------------------------------------------------------
 def _use_color() -> bool:
@@ -62,19 +64,45 @@ def out(s=""):
         print(str(s).encode(enc, "replace").decode(enc))
 
 
-def banner():
-    tag = t("tagline")
-    width = max(len("EKSB"), len(tag)) + 4
-    if UNI:
-        tl, tr, bl, br, h, v = "┌", "┐", "└", "┘", "─", "│"
+# Pure ASCII on purpose: it renders identically in PowerShell, cmd, and every
+# Linux/macOS terminal, in any code page.
+LOGO = r"""
+ ______ _  __  _____  ____
+|  ____| |/ / / ____||  _ \
+| |__  | ' / | (___  | |_) |
+|  __| |  <   \___ \ |  _ <
+| |____| . \  ____) || |_) |
+|______|_|\_\|_____/ |____/
+"""
+LOGO_WIDTH = 30
+
+
+def term_width() -> int:
+    try:
+        return shutil.get_terminal_size((80, 24)).columns
+    except Exception:
+        return 80
+
+
+def banner(full: bool = False) -> None:
+    """The identity. Silent when piped; compact when narrow or routine."""
+    if not sys.stdout.isatty():
+        return                              # never in machine-readable output
+    if full and term_width() >= LOGO_WIDTH:
+        for line in LOGO.strip("\n").splitlines():
+            out(cyan(line))
+        out()
+        out(bold(t("product.name")))
+        out(dim(f"v{VERSION_LABEL}"))
     else:
-        tl = tr = bl = br = "+"
-        h, v = "-", "|"
-    out()
-    out(cyan(tl + h * width + tr))
-    out(cyan(v) + bold("EKSB".center(width)) + cyan(v))
-    out(cyan(v) + tag.center(width) + cyan(v))
-    out(cyan(bl + h * width + br))
+        out()
+        out(bold("EKSB") + dim(" // Workbench"))
+
+
+def tagline() -> None:
+    if sys.stdout.isatty():
+        out()
+        out(t("tagline"))
 
 
 def rule(title=""):
@@ -336,6 +364,199 @@ def add_menu(w):
         cmd_add(w, type_, title)
 
 
+# -- projects and ingestion ----------------------------------------------
+LEVEL_KEY = {1: "level.registered", 2: "level.indexed", 3: "level.integrated"}
+
+
+def cmd_ingest(w, path, name=None, dry_run=False, max_files=None):
+    try:
+        rep = ingest.ingest(w, Path(path), name,
+                            max_files=max_files or ingest.DEFAULT_MAX_FILES,
+                            dry_run=dry_run)
+    except ws.WorkspaceError as e:
+        reason, _, detail = str(e).partition(":")
+        raise UserError(t({"no-dir": "ing.nodir",
+                           "inside-workspace": "ing.inside"}.get(reason, "ing.nodir"),
+                          path=detail))
+    rule(t("ing.done", project=rep.project))
+    out()
+
+    def tally(n, colour, label):
+        out("  " + colour(f"{n:>5}") + "  " + label)
+
+    tally(len(rep.added), green, t("ing.added"))
+    if rep.updated:
+        tally(len(rep.updated), yellow, t("ing.updated"))
+    if rep.unchanged:
+        tally(len(rep.unchanged), dim, t("ing.unchanged"))
+    if rep.skipped:
+        by = {}
+        for _, why in rep.skipped:
+            by[why] = by.get(why, 0) + 1
+        detail = ", ".join(f"{n} {t('skip.' + why)}" for why, n in sorted(by.items()))
+        tally(len(rep.skipped), dim, dim(t("ing.skipped") + ": " + detail))
+    if rep.truncated:
+        out()
+        out(yellow(t("ing.truncated", n=ingest.DEFAULT_MAX_FILES)))
+    out()
+    out(t("ing.indexed_not_understood"))
+    out(dim(t("ing.next")))
+    return 0
+
+
+def cmd_projects(w):
+    rows = ingest.levels(w)
+    rule(t("proj.title"))
+    if not rows:
+        out()
+        out(dim(t("proj.none")))
+        out(dim(t("proj.hint")))
+        return 0
+    out()
+    for r in rows:
+        out(f"  {bold(r['title'])}  {dim('(' + t(LEVEL_KEY[r['level']]) + ')')}")
+        out(f"    {dim(r['root'])}")
+        out(f"    {dim(t('proj.counts', indexed=r['indexed'], integrated=r['integrated']))}")
+    out()
+    out(dim(t("proj.levels")))
+    return 0
+
+
+# -- AI assistants --------------------------------------------------------
+def mcp_command() -> list[str]:
+    """How a client should launch this server. Uses the running interpreter."""
+    return [sys.executable, "-m", "eksb", "mcp"]
+
+
+def mcp_config(workspace: Path | None) -> dict:
+    cmd = mcp_command()
+    entry = {"command": cmd[0], "args": cmd[1:]}
+    if workspace:
+        entry["args"] = cmd[1:] + ["--workspace", str(workspace)]
+    return {"mcpServers": {"eksb": entry}}
+
+
+CLIENT_CONFIGS = {
+    "Claude Code": lambda: [Path.home() / ".claude.json", Path.cwd() / ".mcp.json"],
+    "Claude Desktop": lambda: [
+        Path(os.environ["APPDATA"]) / "Claude" / "claude_desktop_config.json"
+        if os.environ.get("APPDATA") else
+        Path.home() / "Library" / "Application Support" / "Claude"
+        / "claude_desktop_config.json",
+        Path.home() / ".config" / "Claude" / "claude_desktop_config.json",
+    ],
+}
+
+
+def detect_clients() -> list[tuple[str, bool]]:
+    """(client, is EKSB already configured there). Read-only, best effort."""
+    found = []
+    for name, paths in CLIENT_CONFIGS.items():
+        try:
+            candidates = [p for p in paths() if p.is_file()]
+        except Exception:
+            candidates = []
+        if not candidates:
+            continue
+        wired = False
+        for p in candidates:
+            try:
+                if "eksb" in p.read_text(encoding="utf-8", errors="replace").lower():
+                    wired = True
+                    break
+            except OSError:
+                pass
+        found.append((name, wired))
+    return found
+
+
+def cmd_connect(w=None, json_only=False):
+    cfg = mcp_config(w.root if w else None)
+    if json_only:
+        print(json.dumps(cfg, indent=2))
+        return 0
+    rule(t("conn.title"))
+    out()
+    out(t("conn.what"))
+    out()
+    clients = detect_clients()
+    if clients:
+        out(bold(t("conn.detected")))
+        for name, wired in clients:
+            mark = green("[x]") if wired else dim("[ ]")
+            state = t("conn.wired") if wired else t("conn.notwired")
+            out(f"  {mark} {name}  {dim(state)}")
+    else:
+        out(dim(t("conn.nodetect")))
+    out()
+    out(bold(t("conn.howto")))
+    out()
+    out(json.dumps(cfg, indent=2))
+    out()
+    out(t("conn.where"))
+    out(dim(t("conn.restart")))
+    out()
+    out(dim(t("conn.docs")))
+    return 0
+
+
+def cmd_mcp(path=None):
+    from . import mcp
+    w = resolve_ws(path)
+    return mcp.serve(w.root)
+
+
+# -- where things stand ---------------------------------------------------
+def _recent(w, limit=5):
+    def when(n):
+        return str(n.fm.get("updated") or n.fm.get("created") or "")
+    notes = [n for n in w.notes if n.type != "source"]
+    return sorted(notes, key=when, reverse=True)[:limit]
+
+
+def show_status(w):
+    """The 'where was I' screen. Reads, never asks."""
+    counts = w.counts()
+    projects = ingest.levels(w)
+    rule(t("stat.title"))
+    out()
+    out(f"  {t('stat.projects')}: {bold(str(len(projects)))}"
+        f"    {t('stat.items')}: {bold(str(counts['notes']))}")
+    for p in projects[:5]:
+        out(f"    {dim('-')} {p['title']} {dim('(' + t(LEVEL_KEY[p['level']]) + ')')}")
+
+    clients = detect_clients()
+    out()
+    out(f"  {t('stat.ai')}: " + (
+        ", ".join(f"{n}{'' if wired else dim(' (' + t('conn.notwired') + ')')}"
+                  for n, wired in clients)
+        if clients else dim(t("stat.noai"))))
+
+    recent = _recent(w)
+    if recent:
+        out()
+        out(bold(t("stat.recent")))
+        for n in recent:
+            out(f"  {n.title}  {dim('(' + n.type + ')')}")
+
+    a = w.attention()
+    pending = (len(a["queue"]) + len(a["open_questions"]) + len(a["errors"]))
+    out()
+    if pending:
+        out(bold(t("stat.pending", n=pending)))
+        for line in a["queue"][:5]:
+            out(f"  {yellow('!')} {line}")
+        for n, _ in a["open_questions"][:5]:
+            out(f"  {dim('?')} {n.title}")
+        for e in a["errors"][:3]:
+            out(f"  {red('x')} {e}")
+        out()
+        out(dim(t("stat.seeall")))
+    else:
+        out(green(t("att.clean")))
+    return 0
+
+
 def find_obsidian() -> bool:
     """Portable, non-invasive: a config dir or an executable on PATH."""
     if shutil.which("obsidian"):
@@ -354,19 +575,29 @@ def cmd_doctor(path=None):
     out()
     ok = True
 
+    # labels differ in length by language, so measure rather than assume
+    labels = [t(k) for k in ("doc.python", "doc.eksb", "doc.workspace", "doc.schema",
+                             "doc.items", "doc.relations", "doc.broken", "doc.config",
+                             "doc.obsidian", "doc.mcp", "doc.project")]
+    pad = max(len(x) for x in labels) + 2
+
     def row(label, value, status=None):
-        out(f"  {label:<22}{str(value):<34}{status or ''}".rstrip())
+        value = str(value)
+        if len(value) > 34 and status:      # a long path must not eat its status
+            out(f"  {label:<{pad}}{status}")
+            out(f"  {'':<{pad}}{dim(value)}")
+        else:
+            out(f"  {label:<{pad}}{value:<34}{status or ''}".rstrip())
 
     row(t("doc.python"), platform.python_version(), green(t("doc.ok")))
     row(t("doc.eksb"), __version__, green(t("doc.ok")))
 
+    note = None
     try:
         w = resolve_ws(path)
     except UserError as e:
         row(t("doc.workspace"), t("doc.none"), yellow("—"))
-        out()
-        out(f"  {e}")
-        out(f"  {dim(e.hint)}")
+        note = e                            # said after the table, not inside it
         w = None
 
     if w:
@@ -391,13 +622,31 @@ def cmd_doctor(path=None):
         green(t("doc.ok")))
 
     out()
+    if w:
+        rows = ingest.levels(w)
+        if rows:
+            out()
+            for r in rows:
+                row(t("doc.project"), f"{r['title']} ({t(LEVEL_KEY[r['level']])})",
+                    dim(t("proj.counts", indexed=r["indexed"],
+                          integrated=r["integrated"])))
+
+    out()
     out(dim(t("doc.optional")))
     row(t("doc.obsidian"),
         t("doc.detected") if find_obsidian() else t("doc.notdetected"), dim("—"))
-    row("MCP", t("doc.notdetected"), dim("—"))
+    clients = detect_clients()
+    wired = [n for n, on in clients if on]
+    row(t("doc.mcp"),
+        ", ".join(wired) if wired else
+        (t("doc.available") if clients else t("doc.notdetected")), dim("—"))
 
     out()
     out(green(t("doc.ready")) if ok else red(t("doc.notready")))
+    if note is not None:
+        out()
+        out(f"  {note}")
+        out(f"  {dim(note.hint)}")
     return 0 if ok else 1
 
 
@@ -541,44 +790,62 @@ def pick_language(force=False) -> str:
 
 
 def onboarding():
-    banner()
+    banner(full=True)
     pick_language()
+    tagline()
     rule(t("first.title"))
     out()
     out(t("pitch"))
+    out()
+    out(dim(t("first.journey")))
     action = choose(t("first.what"), [
         ("demo", t("first.try")),
         ("create", t("first.create")),
         ("open", t("first.open")),
         ("learn", t("first.learn")),
     ])
+    made = None
     if action == "demo":
         cmd_demo()
+        made = ws.Workspace(config.load()["workspace"])
     elif action == "create":
         default = str(Path.home() / "MyEKSB")
-        path = ask(t("ws.where"), default)
-        cmd_init(path)
+        cmd_init(ask(t("ws.where"), default))
+        made = ws.Workspace(config.load()["workspace"])
         if find_obsidian():
             out()
             out(dim(t("about.obsidian.on")))
+        if ask_yes(t("first.addproject")):
+            path = ask(t("ing.path"))
+            if path:
+                try:
+                    cmd_ingest(made, path)
+                except UserError as e:
+                    out(red(str(e)))
     elif action == "open":
-        path = ask(t("ws.path"))
-        p = Path(path).expanduser().resolve()
+        p = Path(ask(t("ws.path"))).expanduser().resolve()
         if not ws.is_workspace(p):
             out(red(t("ws.notfound", path=p)))
         else:
             config.set_(workspace=str(p))
+            made = ws.Workspace(p)
             out(green(t("ws.opened", path=p)))
     elif action == "learn":
         learn_menu()
     config.set_(onboarded=True)
+
     out()
     out(green(t("ready")))
+    if made is not None:
+        out()
+        out(t("first.connect.hint"))
+        if ask_yes(t("first.connect.now")):
+            cmd_connect(made)
     out()
     out(bold(t("ready.next")))
     out(f'  {cyan("eksb search")} {t("arg.word")}')
-    out(f'  {cyan("eksb attention")}')
-    out(f'  {cyan("eksb doctor")}')
+    out(f'  {cyan("eksb ingest")} {t("arg.path")}')
+    out(f'  {cyan("eksb connect")}')
     return 0
 
 
@@ -626,6 +893,28 @@ def settings_menu():
                 out(red(t("ws.notfound", path=p)))
 
 
+def project_menu(w):
+    pick = choose(t("proj.what"), [
+        ("list", t("proj.list")),
+        ("add", t("proj.add")),
+    ], allow_back=True)
+    if pick is None:
+        return
+    if pick == "list":
+        cmd_projects(w)
+        return
+    path = ask(t("ing.path"))
+    if not path:
+        return
+    name = ask(t("ing.name"), Path(path).expanduser().name)
+    try:
+        cmd_ingest(w, path, name)
+    except UserError as e:
+        out(red(str(e)))
+        if e.hint:
+            out(dim(e.hint))
+
+
 def menu():
     """The main loop. Only offers what this build can actually do."""
     banner()
@@ -638,21 +927,30 @@ def menu():
     while True:
         options = []
         if w:
-            options += [("search", t("menu.search")),
-                        ("add", t("menu.add")),
-                        ("attention", t("menu.attention")),
+            options += [("continue", t("menu.continue")),
+                        ("search", t("menu.search")),
                         ("provenance", t("menu.provenance")),
+                        ("project", t("menu.project")),
+                        ("add", t("menu.add")),
+                        ("connect", t("menu.connect")),
+                        ("attention", t("menu.attention")),
                         ("health", t("menu.health"))]
         else:
             options += [("demo", t("first.try")), ("create", t("first.create")),
                         ("open", t("first.open"))]
-        options += [("about", t("menu.about")), ("settings", t("menu.settings")),
+        options += [("settings", t("menu.settings")),
                     ("learn", t("menu.learn")), ("exit", t("menu.exit"))]
         pick = choose(t("menu.title"), options)
         out()
         if pick == "exit":
             out(t("bye"))
             return 0
+        elif pick == "continue":
+            show_status(w)
+        elif pick == "project":
+            project_menu(w)
+        elif pick == "connect":
+            cmd_connect(w)
         elif pick == "search":
             cmd_search(w, ask(t("search.prompt")), interactive=True)
         elif pick == "add":
@@ -727,6 +1025,25 @@ def build_parser():
     sv.add_argument("--kind", default="personal_note", choices=list(ws.SOURCE_KINDS))
     sv.add_argument("-w", "--workspace")
 
+    ig = sub.add_parser("ingest", help="add a project directory and index its text")
+    ig.add_argument("path", help="the project directory")
+    ig.add_argument("--name", help="what to call the project")
+    ig.add_argument("--dry-run", action="store_true",
+                    help="report what would be indexed, write nothing")
+    ig.add_argument("--max-files", type=int, default=ingest.DEFAULT_MAX_FILES)
+    ig.add_argument("-w", "--workspace")
+
+    sub.add_parser("projects", help="list projects and how far each has got") \
+        .add_argument("-w", "--workspace")
+
+    cn = sub.add_parser("connect", help="connect an AI assistant over MCP")
+    cn.add_argument("--json", action="store_true",
+                    help="print only the client configuration")
+    cn.add_argument("-w", "--workspace")
+
+    sub.add_parser("mcp", help="run the MCP server (started by an AI client)") \
+        .add_argument("-w", "--workspace")
+
     g = sub.add_parser("get", help="show one note")
     g.add_argument("id", help="note id, title or alias")
     g.add_argument("-w", "--workspace")
@@ -774,6 +1091,20 @@ def dispatch(args):
         return cmd_add(resolve_ws(args.workspace), args.type, " ".join(args.title))
     if args.cmd == "save":
         return cmd_save(resolve_ws(args.workspace), args.file, args.title, args.kind)
+    if args.cmd == "ingest":
+        return cmd_ingest(resolve_ws(args.workspace), args.path, args.name,
+                          args.dry_run, args.max_files)
+    if args.cmd == "projects":
+        return cmd_projects(resolve_ws(args.workspace))
+    if args.cmd == "connect":
+        w = None
+        try:
+            w = resolve_ws(args.workspace)
+        except UserError:
+            pass                    # a config without a workspace is still useful
+        return cmd_connect(w, args.json)
+    if args.cmd == "mcp":
+        return cmd_mcp(args.workspace)
     if args.cmd == "get":
         w = resolve_ws(args.workspace)
         n = w.get(args.id)
