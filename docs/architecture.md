@@ -114,7 +114,7 @@ with zero plugins. See [epistemic model](epistemic-model.md) § Epistemic status
 
 **Design goal: as few concurrent writers as possible.**
 
-Every writer that bypasses the validator is a way for the vault to become
+Every writer that bypasses the validator is a way for the workspace to become
 inconsistent without anyone noticing. The reference architecture is a single
 programmatic writer plus an audit log:
 
@@ -122,7 +122,7 @@ programmatic writer plus an audit log:
 
 Rules, independent of any machine:
 
-- A network sync service that writes into the vault is a **second writer**.
+- A network sync service that writes into the workspace is a **second writer**.
   It bypasses both version control and schema validation. Enabling one is an
   architectural change, not a convenience setting.
 - A REST/MCP surface is a **third writer** plus an attack surface. Do not add
@@ -133,12 +133,12 @@ Rules, independent of any machine:
 
 **Which writers are actually live on a given machine is instance state, not
 framework architecture.** It belongs in a workspace's own notes, never in framework documentation — recording
-a particular vault's UUID or config paths in a core document turns one
+a particular workspace's UUID or config paths in a core document turns one
 person's setup into an apparent framework assumption.
 
 ## Clients
 
-The vault is a directory of Markdown. Any MCP-capable agent — Claude Code,
-Hermes, Codex, a local model — reads and writes it under the same
+The workspace is a directory of Markdown. Any MCP-capable agent — Claude Code,
+Codex, a local model — reads and writes it under the same
 [agent rules](agent-rules.md). No client gets privileged state. If a client's memory
-disagrees with the vault, the vault wins.
+disagrees with the workspace, the workspace wins.

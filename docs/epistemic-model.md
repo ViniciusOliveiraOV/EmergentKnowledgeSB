@@ -73,7 +73,7 @@ confidence: high | medium | low         # the human's, not the model's
 review: 2026-11-01                      # date this should be revisited
 ```
 
-Unknown keys are allowed and ignored by the validator — the vault outlives
+Unknown keys are allowed and ignored by the validator — the workspace outlives
 this schema. Renaming or repurposing an existing key is a breaking change and
 requires bumping `schema_version`.
 
@@ -135,10 +135,10 @@ this mechanically — see [ingestion](ingestion.md) § Canonicalizer step 5.
 
 ## Temporal semantics
 
-Two clocks. Confusing them is how a vault loses the ability to say *when you
+Two clocks. Confusing them is how a workspace loses the ability to say *when you
 believed something*.
 
-    created      = SYSTEM time      — when the node was created in the vault
+    created      = SYSTEM time      — when the node was created in the workspace
     asserted_at  = KNOWLEDGE time   — when the position was actually held
 
 `created` is **never** backdated to when an idea was first expressed. A
@@ -154,7 +154,7 @@ different questions.
 | `valid_from` / `valid_until` | Over what period did it apply? |
 | `decided_on` (decisions) | When was the commitment made? |
 | `source_date` (L0) | When was the raw material produced? |
-| `ingested_at` (L0) | When did it enter the vault? |
+| `ingested_at` (L0) | When did it enter the workspace? |
 
 **Imprecision is honest.** `asserted_at` accepts `YYYY`, `YYYY-MM`, or
 `YYYY-MM-DD`. If a transcript says "back in March", write `2026-03`. Do not
@@ -162,7 +162,7 @@ invent `2026-03-01` to satisfy a date parser — that is fabricated provenance
 under [provenance](provenance.md) rule 2.
 
 Retroactive nodes are normal and expected: real ingestion constantly
-surfaces positions older than the vault itself.
+surfaces positions older than the workspace itself.
 
 ## Epistemic status
 
@@ -174,7 +174,7 @@ Six values. Mandatory distinction — the whole system depends on it.
 | `assistant_hypothesis` | A model proposed it, unendorsed | explicit human endorsement |
 | `external_fact` | Verifiable claim from outside, source recorded | verification, keeps source |
 | `source_claim` | A source asserts it; truth not assessed | promotion to external_fact w/ evidence |
-| `inference` | Derived by reasoning over vault content | explicit human endorsement |
+| `inference` | Derived by reasoning over workspace content | explicit human endorsement |
 | `open_question` | Unresolved | being answered, then restated |
 
 Inline form: `#e/user_position`, `#e/inference`, etc.

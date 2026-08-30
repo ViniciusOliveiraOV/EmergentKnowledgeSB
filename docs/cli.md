@@ -1,6 +1,7 @@
 # CLI reference
 
-Everything is read-only except `init`, `demo`, `add`, `save` and `config`.
+Everything is read-only except `init`, `demo`, `add`, `save`, `ingest`
+and `config`.
 No command makes a network connection.
 
 ```
@@ -25,6 +26,25 @@ eksb open PATH
 ```
 
 Remember `PATH` as the default workspace for later commands.
+
+```
+eksb ingest PATH [--name NAME] [--dry-run] [--max-files N] [-w PATH]
+```
+
+Register a project directory and index the prose inside it. Incremental:
+unchanged files are skipped, changed files become new source notes and the
+earlier versions are kept. Skips `.git`, `node_modules`, build output,
+caches, binaries and files over 1 MB, and reports what it skipped and why.
+
+**Indexing is not understanding** — see
+[knowledge-levels.md](knowledge-levels.md).
+
+```
+eksb projects [-w PATH]
+```
+
+Every registered project and how far it has got: registered, indexed, or
+integrated.
 
 ```
 eksb demo [PATH]
@@ -136,6 +156,29 @@ eksb about [PATH]
 Where your data is, what runs in the background (nothing), what network
 connections are made (none), which integrations are on, and how to remove
 EKSB.
+
+## AI assistants
+
+```
+eksb connect [--json] [-w PATH]
+```
+
+Detect MCP clients on this machine, say whether EKSB is wired into each, and
+print the configuration to paste. `--json` prints only the configuration.
+
+```
+eksb mcp [-w PATH]
+```
+
+Run the MCP server: JSON-RPC over stdin and stdout. **You do not run this
+yourself** — your AI client starts it, and it exits when the client does. No
+port is bound and no daemon is left behind.
+
+Tools: `eksb_search`, `eksb_get`, `eksb_provenance`, `eksb_attention`,
+`eksb_workspace_status`, `eksb_ingest`, `eksb_submit_candidate`. The last is
+the only write path, and it cannot delete, rename, edit raw sources, write an
+invalid note, or record a claim as your own position. Full detail in
+[integrations/mcp.md](integrations/mcp.md).
 
 ## Settings
 

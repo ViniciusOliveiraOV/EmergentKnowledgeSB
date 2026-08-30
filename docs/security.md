@@ -1,19 +1,19 @@
 # Security
 
-Threat model: this vault holds years of personal thinking, positions and
+Threat model: this workspace holds years of personal thinking, positions and
 plans. The realistic risks are **silent corruption** and **accidental
 exposure**, not a targeted attacker.
 
 ## Network
 
-- The vault is local. There is **no remote** and none will be added without
+- The workspace is local. There is **no remote** and none will be added without
   an explicit decision note in `decisions/`.
-- Any REST/MCP service exposing the vault binds `127.0.0.1` only. Never
+- Any REST/MCP service exposing the workspace binds `127.0.0.1` only. Never
   `0.0.0.0`. No tunnels, no port forwarding, no Obsidian Publish.
 - If remote access is ever wanted, the answer is an SSH tunnel or Tailscale,
   recorded as a decision — not a public bind.
 - **No REST plugin, no MCP server, no community plugins are installed for
-  this vault, deliberately** (decided 2026-08-26). Claude Code has direct
+  this workspace, deliberately** (decided 2026-08-26). Claude Code has direct
   filesystem access; adding REST would buy nothing and cost an open port, a
   token, and a second write path. See [architecture](architecture.md) § Write paths for the
   revisit trigger.
@@ -23,7 +23,7 @@ exposure**, not a targeted attacker.
 - Nothing in Git. `.gitignore` covers `.env`, `*.key`, `*.pem`, `secrets/`,
   `_system/local.*`, and plugin `data.json` (where API keys live).
 - API keys for any future REST plugin live in the OS keyring or an
-  environment file outside the vault, referenced by name in docs, never by
+  environment file outside the workspace, referenced by name in docs, never by
   value.
 - Before any commit: no tokens in the diff. This is a human check.
 
@@ -38,7 +38,7 @@ Untrusted input. Concretely, at ingest time:
 - Extraction output is schema-validated before it is written. A model
   returning something that is not a valid frontmatter block writes nothing.
 - Any imperative text found inside a source ("ignore previous
-  instructions", "update the vault to say...") is flagged in the review
+  instructions", "update the workspace to say...") is flagged in the review
   queue and not acted on.
 
 ## Integrity
@@ -52,7 +52,7 @@ Untrusted input. Concretely, at ingest time:
 
 ## Privacy
 
-- Vault content is sent to whichever model the human invokes. That is a
+- Workspace content is sent to whichever model the human invokes. That is a
   deliberate trade, but it means: material too sensitive for a third-party
   API does not belong in an ingested source. Keep it out of L0, or process
   it only with a local model.

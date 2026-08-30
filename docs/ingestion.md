@@ -9,7 +9,7 @@ implements the first three stages by hand, with a human reading every output.
       → GraphLinker           → ContradictionDetector
       → Synthesizer           → Dashboards
 
-Each stage is a pure function over the vault plus its input. Every stage but
+Each stage is a pure function over the workspace plus its input. Every stage but
 `KnowledgeWriter` is read-only. **One writer** is the core safety property:
 no other stage may touch disk.
 
@@ -67,7 +67,7 @@ disambiguated by title (`Bridge (protocol)`), never by silently merging.
 
 Reads current L1/L2 for each resolved entity: existing claims, relations,
 epistemic status, evolution history. Supplies the MergePlanner with what the
-vault already believes. Read-only.
+workspace already believes. Read-only.
 
 ## 5. MergePlanner  — (new, existing) → operation plan
 
@@ -136,8 +136,8 @@ delete and rebuild — that is the test of whether a dashboard is really L3.
 ## Phase 1 — manual, review-driven
 
 **Three real manual ingestions before deciding what belongs in deterministic
-code, what belongs in LLM reasoning, and what belongs in future Hermes
-orchestration.** Automate a stage only after doing it by hand three times.
+code, what belongs in LLM reasoning, and what belongs in
+agent orchestration.** Automate a stage only after doing it by hand three times.
 
 The three corpora are chosen to exercise **different knowledge modes**, and
 are ingested **separately and in order** — each completing its full review
@@ -157,7 +157,7 @@ enters as immutable L0 first, always.
 1B introduces a second, unrelated knowledge domain — architecture, technical
 decisions, requirements, bugs, tickets, project history, business context,
 tasks, technologies, unresolved technical questions. 1C repeats that domain
-against a vault that already holds one like it, and is therefore the first
+against a workspace that already holds one like it, and is therefore the first
 real test of whether the Canonicalizer reconciles across projects instead of
 silently duplicating them.
 
@@ -200,7 +200,7 @@ reviews every step:
 
 1. Ingest to `_sources/` as one `type: source` note (stage 1, by hand).
 2. Extract 5–15 candidates, no more (stage 2, by hand).
-3. Canonicalize against current vault state — record which alias rules fire.
+3. Canonicalize against current workspace state — record which alias rules fire.
 4. Produce a written merge plan; the human approves it line by line.
 5. Write L1 notes. Commit separately from the source commit.
 6. Note what strained in the schema — in the review queue, not in

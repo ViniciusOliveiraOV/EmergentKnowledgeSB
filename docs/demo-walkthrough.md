@@ -42,7 +42,7 @@ verification caveat rather than as settled.
 
     → ONE entity. Four aliases persisted, so it cannot re-fragment.
 
-**Merge planning** — against an empty vault:
+**Merge planning** — against an empty workspace:
 
     CREATE  Read Latency Is The Constraint
     CREATE  Horizontal Partitioning          (4 surface forms → 1)

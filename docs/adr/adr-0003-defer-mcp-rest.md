@@ -1,7 +1,7 @@
 ---
 id: adr-0003-defer-mcp-rest
 track: core
-status: accepted
+status: superseded
 date: 2026-08-26
 ---
 
@@ -45,3 +45,23 @@ surface on a store of years of personal thinking.
 ## Revisit when
 
 An external agent that cannot use the filesystem genuinely needs access.
+
+---
+
+**Update, v0.1.0-alpha.** Revisited and partly reversed. An MCP
+surface is now implemented (`eksb mcp`), because the deciding factor
+changed: the value is not remote access but *selective retrieval* —
+an agent asking for the relevant history instead of being handed the
+whole corpus. The reasoning below still governs its shape, and the
+concerns were answered rather than dropped:
+
+- **Not a network surface.** stdio only, started by the client as a
+  child process, gone when it exits. No port is bound, nothing
+  listens, and there is no daemon.
+- **Not a second writer that bypasses validation.** The only write
+  path is `eksb_submit_candidate`, which goes through the same schema
+  and the same adjudication as any other write. It cannot delete,
+  rename, edit `_sources/`, or record a claim as the user's position.
+- **REST is still deferred**, on the original reasoning.
+
+See [../integrations/mcp.md](../integrations/mcp.md).

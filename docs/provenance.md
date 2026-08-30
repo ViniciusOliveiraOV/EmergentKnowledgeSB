@@ -35,7 +35,7 @@ pipeline_version: 0
 ```
 
 `source_date` is knowledge time (when the material was produced);
-`ingested_at` is system time (when it entered the vault). Same distinction
+`ingested_at` is system time (when it entered the workspace). Same distinction
 as `asserted_at` vs. `created` — see [epistemic model](epistemic-model.md) § Temporal semantics.
 
 `content_hash` is what makes L0 append-only *checkable*. The validator

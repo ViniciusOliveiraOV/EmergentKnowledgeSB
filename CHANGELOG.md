@@ -4,10 +4,41 @@
 
 First release intended to be installed and used by someone who did not write it.
 
+The end-to-end loop it closes:
+
+```
+work history -> EKSB -> selective retrieval -> AI agent -> work
+             -> structured writeback -> future retrieval
+```
+
 ### Added
 
 - **`eksb` command**, cross-platform, installed via `pip`. Run with no
   arguments for an interactive menu; every capability is also a subcommand.
+- **`eksb mcp` — a generic MCP server**, spoken as plain JSON-RPC over stdio
+  with no SDK and no new dependency. Seven tools: `eksb_search`, `eksb_get`,
+  `eksb_provenance`, `eksb_attention`, `eksb_workspace_status`,
+  `eksb_ingest`, `eksb_submit_candidate`. It belongs to EKSB — no vendor, no
+  orchestrator, no private configuration. Started by the client, exits with
+  it: no port, no daemon. `eksb connect` detects installed clients and prints
+  the configuration to paste.
+- **`eksb ingest PATH` — project directory ingestion.** Registers a project
+  and indexes the prose inside it, skipping `.git`, `node_modules`, build
+  output, caches, binaries and oversized files. Incremental: unchanged files
+  are skipped, changed files become new source notes linked to the previous
+  version, and nothing already indexed is destroyed. The source notes are
+  their own ledger, so there is no side index to corrupt.
+- **Three honest levels** — registered, indexed, integrated — reported by
+  `eksb projects`, `eksb doctor` and `eksb_workspace_status`. Indexing a
+  directory is never presented as understanding it.
+- **A candidate lifecycle for agent writeback.** An agent proposes; EKSB
+  decides: CREATE, UPDATE (claims appended, never overwritten), NO_OP, or
+  CONFLICT / REVIEW_REQUIRED, which asks the user **one short question in
+  ordinary language** instead of writing. The boundary the design exists for
+  is enforced mechanically: a claim submitted as `user_position` by an agent
+  is refused outright.
+- **`eksb projects`** and a "Where things stand" screen: projects, knowledge
+  count, connected assistants, what was touched recently, what is waiting.
 - **English and Português (Brasil)** throughout the CLI. Chosen on first run,
   remembered, changeable with `eksb config --set-lang`.
 - **Onboarding** — language, a three-sentence explanation, then a choice
@@ -49,10 +80,14 @@ First release intended to be installed and used by someone who did not write it.
 
 ### Not included
 
-- No ingestion automation: turning a conversation into notes is still manual
-  and human-reviewed.
-- No MCP or REST surface — see ADR-0003.
-- No daemon, server, GUI, cloud sync, account system or telemetry.
+- **No built-in LLM.** EKSB calls no model and needs no API key. Semantic
+  extraction happens through a connected agent, or by hand.
+- No REST surface. MCP over stdio is the only programmatic writer, and it
+  cannot delete, rename, edit raw sources or write an invalid note.
+- No daemon, server, GUI, cloud sync, account system, vector database or
+  telemetry.
+- No measured token savings claimed — selective retrieval is a documented
+  design goal, not a benchmarked result.
 
 ## 0.0.1-prealpha
 

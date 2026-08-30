@@ -121,6 +121,32 @@ turned down, and what it costs you.
 Those tags are what make `eksb attention` and `eksb provenance` useful. There
 are six of them; [epistemic-model.md](epistemic-model.md) lists them all.
 
+**Add a project.**
+
+```
+eksb ingest ~/Projects/atlas --name Atlas
+```
+
+EKSB indexes the prose in that folder — READMEs, docs, decision records —
+skipping code, dependencies and build output. Run it again any time; only
+what changed is re-read, and earlier versions are kept.
+
+This makes the text searchable and citable. It does **not** mean EKSB
+understands the project: see [knowledge-levels.md](knowledge-levels.md).
+
+**Connect an assistant.** This is the step that pays for the rest.
+
+```
+eksb connect
+```
+
+Paste the configuration it prints into your MCP client. From then on your
+assistant can search your history instead of asking you to repeat it, check
+whether a claim was your decision or a previous model's guess, and record
+what you decide — as a proposal you approve, never as your position.
+
+No API key. Nothing runs until the client starts it.
+
 **Check in.**
 
 ```

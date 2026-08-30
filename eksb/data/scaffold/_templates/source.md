@@ -12,7 +12,7 @@ source_url:
 source_date:             # knowledge time — when the material was produced
 authors: []
 content_hash: 
-ingested_at:             # system time — when it entered the vault
+ingested_at:             # system time — when it entered the workspace
 ingested_by: 
 pipeline_version: 0
 ---
