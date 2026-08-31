@@ -156,12 +156,42 @@ class UserError(Exception):
         self.hint = hint
 
 
+class DemoWriteRefused(UserError):
+    """Tried to put real work in the sandbox. Interactively, offer a way out."""
+
+
 def demo_guard(w) -> None:
     """Turn the demo's read-only rule into a sentence with a next step."""
     if w is not None and w.is_demo:
-        raise UserError(t("demo.readonly"),
-                        t("demo.readonly.hint",
-                          path=Path.home() / "MyEKSB"))
+        raise DemoWriteRefused(t("demo.readonly"),
+                               t("demo.readonly.hint",
+                                 path=Path.home() / "MyEKSB"))
+
+
+def open_or_create(prompt=None, assume_create=False):
+    """Ask for a workspace path; offer to create one if there is none there.
+
+    The way out of the demo. A new user types ~/MyEKSB expecting it to work,
+    so a missing workspace is a question, not a dead end. `assume_create`
+    when they have already said they want one: asking twice is friction, not
+    consent.
+    """
+    path = ask(prompt or t("ws.path"), str(Path.home() / "MyEKSB"))
+    if not path:
+        return None
+    p = Path(path).expanduser().resolve()
+    if ws.is_workspace(p):
+        config.set_(workspace=str(p))
+        out(green(t("ws.opened", path=p)))
+        return ws.Workspace(p)
+    if not assume_create and not ask_yes(t("ws.createhere", path=p)):
+        return None
+    try:
+        cmd_init(str(p))                 # sets it as the default workspace
+    except UserError as e:
+        out(red(str(e)))
+        return None
+    return ws.Workspace(p)
 
 
 def resolve_ws(path=None) -> ws.Workspace:
@@ -902,13 +932,7 @@ def settings_menu():
         if pick == "lang":
             pick_language(force=True)
         else:
-            path = ask(t("ws.path"))
-            p = Path(path).expanduser().resolve()
-            if ws.is_workspace(p):
-                config.set_(workspace=str(p))
-                out(green(t("ws.opened", path=p)))
-            else:
-                out(red(t("ws.notfound", path=p)))
+            open_or_create()
 
 
 def project_menu(w):
@@ -944,7 +968,18 @@ def menu():
         out(dim(t("ws.none")))
     while True:
         options = []
-        if w:
+        if w and w.is_demo:
+            # in the demo, the next thing anyone wants is to start real work
+            options += [("continue", t("menu.continue.demo")),
+                        ("search", t("menu.search.demo")),
+                        ("provenance", t("menu.provenance")),
+                        # kept, and it leads somewhere: it explains why the
+                        # demo cannot hold real work, then offers the way out
+                        ("add", t("menu.add")),
+                        ("create", t("first.create")),
+                        ("open", t("first.open")),
+                        ("connect", t("menu.connect"))]
+        elif w:
             options += [("continue", t("menu.continue")),
                         ("search", t("menu.search")),
                         ("provenance", t("menu.provenance")),
@@ -965,6 +1000,11 @@ def menu():
             return 0
         try:
             w = dispatch_menu(pick, w)
+        except DemoWriteRefused as e:   # offer the way out, rather than a dead end
+            out(red(str(e)))
+            out()
+            if ask_yes(t("demo.offer")):
+                w = open_or_create(t("ws.where"), assume_create=True) or w
         except UserError as e:          # stay in the menu; say what to do instead
             out(red(str(e)))
             if e.hint:
@@ -984,6 +1024,7 @@ def dispatch_menu(pick, w):
     elif pick == "search":
         cmd_search(w, ask(t("search.prompt")), interactive=True)
     elif pick == "add":
+        demo_guard(w)            # refuse up front, not after three questions
         add_menu(w)
     elif pick == "attention":
         show_attention(w)
@@ -1004,16 +1045,12 @@ def dispatch_menu(pick, w):
         cmd_demo()
         w = ws.Workspace(config.load()["workspace"])
     elif pick == "create":
-        cmd_init(ask(t("ws.where"), str(Path.home() / "MyEKSB")))
-        w = ws.Workspace(config.load()["workspace"])
+        made = open_or_create(t("ws.where"), assume_create=True)
+        if made is not None:
+            w = made
+            out(dim(t("ws.nowactive")))
     elif pick == "open":
-        p = Path(ask(t("ws.path"))).expanduser().resolve()
-        if ws.is_workspace(p):
-            config.set_(workspace=str(p))
-            w = ws.Workspace(p)
-            out(green(t("ws.opened", path=p)))
-        else:
-            out(red(t("ws.notfound", path=p)))
+        w = open_or_create() or w
     return w
 
 

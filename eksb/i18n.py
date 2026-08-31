@@ -49,7 +49,9 @@ STRINGS: dict[str, dict[str, str]] = {
     # -- main menu ----------------------------------------------------
     "menu.title": "What would you like to do?",
     "menu.continue": "Where things stand",
+    "menu.continue.demo": "Look around the demo",
     "menu.search": "Search my history",
+    "menu.search.demo": "Search the demo",
     "menu.project": "Projects",
     "menu.connect": "Connect an AI assistant",
     "menu.add": "Add something",
@@ -142,6 +144,8 @@ STRINGS: dict[str, dict[str, str]] = {
     "ws.opened": "Now using the workspace at {path}",
     "ws.notfound": "There is no EKSB workspace at {path}.",
     "ws.path": "Path to the workspace",
+    "ws.createhere": "There is no workspace at {path} yet. Create one there?",
+    "ws.nowactive": "That is now your active workspace.",
 
     # -- demo ---------------------------------------------------------
     "demo.installing": "Setting up the demo workspace...",
@@ -156,6 +160,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "demo.readonly": ("This is the demo workspace. Create or open your own "
                       "workspace before adding real projects or knowledge."),
     "demo.readonly.hint": "eksb init {path}",
+    "demo.offer": "Create your own workspace now?",
 
     # -- search -------------------------------------------------------
     "search.prompt": "Search for",
@@ -333,7 +338,9 @@ STRINGS: dict[str, dict[str, str]] = {
 
     "menu.title": "O que você quer fazer?",
     "menu.continue": "Como as coisas estão",
+    "menu.continue.demo": "Explorar a demonstração",
     "menu.search": "Buscar no meu histórico",
+    "menu.search.demo": "Buscar na demonstração",
     "menu.project": "Projetos",
     "menu.connect": "Conectar um assistente de IA",
     "menu.add": "Adicionar algo",
@@ -422,6 +429,8 @@ STRINGS: dict[str, dict[str, str]] = {
     "ws.opened": "Usando agora o workspace em {path}",
     "ws.notfound": "Não existe um workspace EKSB em {path}.",
     "ws.path": "Caminho do workspace",
+    "ws.createhere": "Ainda não existe um workspace em {path}. Criar um lá?",
+    "ws.nowactive": "Este agora é o seu workspace ativo.",
 
     "demo.installing": "Preparando o workspace de demonstração...",
     "demo.ready": "Demonstração pronta em {path}",
@@ -436,6 +445,7 @@ STRINGS: dict[str, dict[str, str]] = {
                       "próprio workspace antes de adicionar projetos ou "
                       "conhecimento reais."),
     "demo.readonly.hint": "eksb init {path}",
+    "demo.offer": "Quer criar seu próprio workspace agora?",
 
     "search.prompt": "Buscar por",
     "search.none": "Nada corresponde a \"{q}\".",

@@ -31,12 +31,18 @@ def isolated(tmp_path, monkeypatch):
 
 
 def run(*argv):
-    """Run the CLI, capture stdout, return (exit code, output)."""
+    """Run the CLI, capture stdout, return (exit code, output).
+
+    A scripted session that runs out of answers exits cleanly, exactly as it
+    would on a closed stdin — so tests never have to encode menu numbering.
+    """
     buf = io.StringIO()
     old = sys.stdout
     sys.stdout = buf
     try:
         code = cli.main(list(argv))
+    except SystemExit as e:
+        code = e.code or 0
     finally:
         sys.stdout = old
     return code, buf.getvalue()
@@ -49,9 +55,8 @@ def test_validator_selftest():
 
 def test_version_and_help():
     for flag in ("--version", "--help"):
-        with pytest.raises(SystemExit) as e:
-            run(flag)
-        assert e.value.code == 0
+        code, out = run(flag)
+        assert code == 0, (flag, out)
 
 
 def test_bundled_demo_is_valid():
@@ -215,8 +220,19 @@ def test_about_states_what_runs_and_where_data_lives(isolated):
 
 # -- interactive ---------------------------------------------------------
 def feed(monkeypatch, answers):
+    """Script the answers; running out behaves like the user closing stdin."""
     it = iter(answers)
-    monkeypatch.setattr("builtins.input", lambda *_: next(it))
+
+    def scripted(prompt=""):
+        print(prompt, end="")      # a real terminal shows the prompt; so must this
+        try:
+            answer = next(it)
+        except StopIteration:
+            print()
+            raise EOFError
+        print(answer)
+        return answer
+    monkeypatch.setattr("builtins.input", scripted)
 
 
 def test_first_run_onboarding_picks_language_then_demo(isolated, monkeypatch):
@@ -293,7 +309,8 @@ def test_menu_offers_no_dead_options_without_a_workspace(isolated, monkeypatch):
 
 def test_menu_offers_knowledge_options_with_a_workspace(isolated, monkeypatch):
     config.set_(onboarded=True, lang="en")
-    run("demo", str(isolated / "demo"))
+    mine = seeded(isolated)
+    config.set_(workspace=str(mine))
     menu_until_exit(isolated, monkeypatch,
                     expect_present=["Where things stand", "Search my history",
                                     "Projects", "Connect an AI assistant",
@@ -837,3 +854,95 @@ def test_a_demo_installed_anywhere_is_still_protected(isolated):
     assert ws.Workspace(isolated / "elsewhere").is_demo
     code, out = run("add", "Real", "-w", str(isolated / "elsewhere"))
     assert code == 1 and "This is the demo workspace." in out
+
+
+# -- getting out of the demo ---------------------------------------------
+def test_demo_menu_offers_the_way_out(isolated, monkeypatch):
+    """In the demo, creating or opening a real workspace must be right there."""
+    config.set_(onboarded=True, lang="en")
+    run("demo", str(isolated / "demo"))
+    out = menu_until_exit(isolated, monkeypatch,
+                          expect_present=["Create my workspace",
+                                          "Open an existing workspace",
+                                          "Search the demo",
+                                          "Add something"],
+                          # ingesting a project cannot work here at all
+                          expect_absent=["Projects", "What needs my attention?"])
+    assert "Look around the demo" in out
+
+
+def test_refused_write_offers_to_create_a_workspace_then_ingest_works(isolated,
+                                                                      monkeypatch):
+    """demo -> try real work -> create -> active is real -> ingest succeeds."""
+    config.set_(onboarded=True, lang="en")
+    run("demo", str(isolated / "demo"))
+    assert ws.Workspace(config.load()["workspace"]).is_demo
+
+    mine = isolated / "MyEKSB"
+    proj = a_project(isolated / "proj")
+
+    feed(monkeypatch, [
+        "4",            # Add something -- refused, because this is the demo
+        "y",            # yes, create my own workspace
+        str(mine),      # here -- no second confirmation: consent is given
+    ])
+    code, out = run()
+    assert code == 0, out
+    assert "This is the demo workspace." in out
+    assert "Create your own workspace now?" in out
+
+    # the new workspace exists, is real, and is now the active one
+    assert ws.is_workspace(mine)
+    active = ws.Workspace(config.load()["workspace"])
+    assert active.root == mine.resolve() and not active.is_demo
+
+    # and real work now lands in it
+    code, out = run("ingest", str(proj), "--name", "Atlas")
+    assert code == 0 and "Indexed Atlas" in out
+    assert list((mine / "_sources").glob("*Atlas*"))
+    assert not validate(mine)[0]
+    assert not list((isolated / "demo" / "_sources").glob("*Atlas*"))
+
+
+def test_typing_a_path_that_is_not_a_workspace_offers_to_create_it(isolated,
+                                                                   monkeypatch):
+    """The Settings dead end: ~/MyEKSB used to just say 'no workspace there'."""
+    config.set_(onboarded=True, lang="en")
+    run("demo", str(isolated / "demo"))
+    mine = isolated / "MyEKSB"
+
+    feed(monkeypatch, [
+        "6",            # Open an existing workspace
+        str(mine),      # ...which does not exist yet
+        "y",            # yes, create one there
+    ])
+    code, out = run()
+    assert code == 0, out
+    assert "Create one there?" in out
+    assert ws.is_workspace(mine)
+    assert ws.Workspace(config.load()["workspace"]).root == mine.resolve()
+
+
+def test_declining_creates_nothing(isolated, monkeypatch):
+    config.set_(onboarded=True, lang="en")
+    run("demo", str(isolated / "demo"))
+    mine = isolated / "MyEKSB"
+
+    feed(monkeypatch, ["6", str(mine), "n"])            # 6 = Open, in the demo menu
+    code, out = run()
+    assert code == 0, out
+    assert not mine.exists()                            # nothing without consent
+    assert ws.Workspace(config.load()["workspace"]).is_demo
+
+
+def test_the_way_out_speaks_portuguese(isolated, monkeypatch):
+    config.set_(onboarded=True, lang="pt-BR")
+    run("demo", str(isolated / "demo"))
+    mine = isolated / "MeuEKSB"
+
+    feed(monkeypatch, ["4", "s", str(mine)])            # Adicionar algo -> recusa
+    code, out = run()
+    assert code == 0, out
+    assert "Este é o workspace de demonstração." in out
+    assert "Quer criar seu próprio workspace agora?" in out
+    assert ws.is_workspace(mine)

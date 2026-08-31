@@ -77,6 +77,12 @@ work history -> EKSB -> selective retrieval -> AI agent -> work
   MCP writeback refuse with a sentence and the command to create a workspace
   of your own. Nothing is migrated or deleted automatically, and the demo is
   labelled `DEMO` in `doctor`, `about` and the status screen.
+- **Getting out of the demo is now one step.** The demo's menu carries
+  *Create my workspace* and *Open an existing workspace* directly, a refused
+  write offers to create one on the spot, and typing a path that is not yet a
+  workspace asks whether to create it there rather than dead-ending on "there
+  is no EKSB workspace at …". The new workspace becomes active immediately;
+  nothing is created without consent.
 
 ### Changed
 

@@ -67,8 +67,22 @@ every line is derived from what the notes already say.
 
 The demo is a **sandbox**. You can read it however you like, but it will
 refuse to take real work — `ingest`, `add` and `save` are turned off there,
-so your actual project cannot end up mixed into a fictional one. When you
-want to keep something real, make a workspace of your own.
+so your actual project cannot end up mixed into a fictional one.
+
+Getting out is one step. While the demo is active, the menu offers **Create
+my workspace** and **Open an existing workspace** directly; and if you try to
+add something, it says why and offers to make you a workspace on the spot:
+
+```
+This is the demo workspace. Create or open your own workspace before
+adding real projects or knowledge.
+
+Create your own workspace now? [y/N]: y
+Where should the workspace live? [/home/you/MyEKSB]:
+```
+
+The new workspace becomes the active one immediately. Nothing is created
+without you saying so, and nothing is moved out of the demo.
 
 ## Your own workspace
 

@@ -60,6 +60,10 @@ writeback are refused, with a sentence telling you to create your own
 workspace first — so a real project can never end up filed inside the
 fiction. Nothing is migrated or deleted for you.
 
+Interactively, that refusal offers to create a workspace there and then, and
+the demo's menu carries **Create my workspace** and **Open an existing
+workspace** as first-class options.
+
 ### How a workspace is found
 
 In order: an explicit `-w/--workspace` (or the positional path, where a
