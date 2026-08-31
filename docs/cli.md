@@ -1,8 +1,56 @@
 # CLI reference
 
-Everything is read-only except `init`, `demo`, `add`, `save`, `ingest`
-and `config`.
-No command makes a network connection.
+Everything is read-only except `init`, `demo`, `add`, `save`, `ingest`,
+`workspace delete` and `config`. No command makes a network connection.
+
+## Three surfaces, one implementation
+
+> **Every ordinary human capability has a guided path. Every guided
+> capability worth automating has a command. Infrastructure needs no menu
+> entry.**
+
+```
+                        EKSB core
+                            |
+        +-------------------+-------------------+
+        |                   |                   |
+      menu                 CLI                 MCP
+        |                   |                   |
+   ordinary user       power user             agent
+```
+
+The menu and the commands call the same functions; neither is a reduced
+version of the other. Someone who only ever types `eksb` can do everything
+that constitutes normal use. Someone scripting over SSH can ignore the menu
+entirely.
+
+| Capability | Guided | Command |
+|---|---|---|
+| Try the demo | first run, menu | `eksb demo` |
+| Reset the demo | menu, Manage workspaces | `eksb demo --reset` |
+| Create a workspace | menu, Manage workspaces | `eksb init PATH` |
+| Open another | menu, Manage workspaces | `eksb open PATH` |
+| Stop using one | Manage workspaces | `eksb workspace forget` |
+| Delete one from disk | Manage workspaces | `eksb workspace delete PATH --yes` |
+| Where things stand | menu | `eksb status` |
+| Search | menu | `eksb search QUERY` |
+| Read a note | a search result | `eksb get ID` |
+| Where it came from | menu | `eksb provenance ID` |
+| What needs attention | menu | `eksb attention` |
+| Add a note | Add something | `eksb add TITLE` |
+| Keep a conversation | Add something | `eksb save FILE` |
+| Add a project | Projects | `eksb ingest PATH` |
+| List projects | Projects | `eksb projects` |
+| Connect an assistant | menu | `eksb connect` |
+| Check the workspace | menu | `eksb doctor` |
+| Language, settings | Settings | `eksb config` |
+| What runs, where data lives | Learn more | `eksb about` |
+
+Three commands have no menu entry, deliberately. `eksb validate` is what
+"Check my workspace" reports in plain words; `eksb get` is reached by picking
+a search result; `eksb mcp` is started by an AI client and is not a human
+task. A test enforces this table, so a capability cannot quietly gain one
+surface and not the other.
 
 ```
 eksb                       interactive menu (onboarding on first run)
@@ -28,15 +76,19 @@ eksb open PATH
 Remember `PATH` as the default workspace for later commands.
 
 ```
-eksb forget
+eksb workspace                       show which workspace is in use
+eksb workspace forget                stop using it; deletes nothing
+eksb workspace delete PATH [--yes]   delete it from disk
+eksb forget                          shorthand for `workspace forget`
 ```
 
-Stop using the current workspace. Clears EKSB's reference to it and
-**deletes nothing** — reopen it any time with `eksb open`.
+`forget` clears EKSB's reference and **deletes nothing** — reopen it any time
+with `eksb open`.
 
-Deleting a workspace from disk is deliberately not a flag: it lives in
-Settings → Manage workspaces, and asks you to type the folder name. The demo
-cannot be deleted that way; reset it instead.
+`delete` is the destructive one. Interactively it asks you to type the folder
+name; in a script it requires `--yes`, and refuses rather than prompting into
+a closed stdin. It will not delete the demo (reset it instead) or a home
+directory.
 
 ```
 eksb ingest PATH [--name NAME] [--dry-run] [--max-files N] [-w PATH]

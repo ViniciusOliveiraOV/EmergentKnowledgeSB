@@ -49,6 +49,17 @@ it is unknown. An absent field is honest; a plausible invented one is
 corruption that survives for years looking correct. If a feature is only
 convenient when it fabricates, the answer is no.
 
+**Three surfaces, one implementation.** *Every ordinary human capability has
+a guided path. Every guided capability worth automating has a command.
+Infrastructure needs no menu entry.* The menu, the CLI and MCP all call the
+same functions — none is a reduced version of another. When you add a
+capability, add both surfaces and the row in the parity table in
+`tests/test_eksb.py`; a test fails if you add one and forget the other. Power
+tools (`validate`, `get`) may be command-only if a guided action already
+answers the same question in plain words, and machine-facing plumbing
+(`mcp`) never becomes a menu entry — declare either in `COMMAND_ONLY`, with a
+reason.
+
 **Simple surface, rigorous inside.** The machinery is allowed to be precise.
 What the user reads is not allowed to require the vocabulary. "Where did this
 come from?" over "query canonical provenance". New user-facing strings go

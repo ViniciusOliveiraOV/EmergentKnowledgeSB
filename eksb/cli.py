@@ -266,7 +266,9 @@ def cmd_search(w, query, interactive=False):
         out()
         s = ask(t("search.pick"))
         if s.isdigit() and 1 <= int(s) <= len(hits):
-            show_provenance(w, hits[int(s) - 1][0])
+            note = hits[int(s) - 1][0]
+            show_note(note)              # the note itself...
+            show_provenance(w, note)     # ...and where it came from
     return 0
 
 
@@ -380,28 +382,28 @@ def cmd_save(w, src, title=None, kind="personal_note"):
 
 
 def add_menu(w):
-    kind = choose(t("add.what"), [
+    pick = choose(t("add.what"), [
         ("note", t("add.note")),
         ("source", t("add.source")),
     ], allow_back=True)
-    if kind is None:
+    if pick is None:
         return
-    if kind == "source":
+    if pick == "source":
         src = ask(t("save.path"))
         if not src:
             return
-        pick = choose(t("save.kind"), [(k, t("save.kind." + k))
+        kind = choose(t("save.kind"), [(k, t("save.kind." + k))
                                        for k in ("chatgpt", "claude", "web",
                                                  "paper", "personal_note")])
-        cmd_save(w, src, None, pick)
-        return
-    type_ = choose(t("add.type"), [(x, t("type." + x)) for x in ws.ADDABLE],
-                   allow_back=True)
-    if type_ is None:
-        return
-    title = ask(t("add.title"))
-    if title:
-        cmd_add(w, type_, title)
+        cmd_save(w, src, None, kind)
+    elif pick == "note":
+        type_ = choose(t("add.type"), [(x, t("type." + x)) for x in ws.ADDABLE],
+                       allow_back=True)
+        if type_ is None:
+            return
+        title = ask(t("add.title"))
+        if title:
+            cmd_add(w, type_, title)
 
 
 # -- projects and ingestion ----------------------------------------------
@@ -955,8 +957,24 @@ def cmd_forget():
     return 0
 
 
-def cmd_delete(w):
-    """Delete a workspace from disk. Destructive, so consent must be typed."""
+def cmd_workspace_show():
+    """`eksb workspace` with no subcommand: which one is in use."""
+    try:
+        w = resolve_ws()
+    except UserError:
+        out(dim(t("doc.none")))
+        out(dim(t("ws.none.hint")))
+        return 1
+    out(str(w.root) + (f"  [{t('demo.label')}]" if w.is_demo else ""))
+    return 0
+
+
+def cmd_delete(w, assume_yes=False):
+    """Delete a workspace from disk. Destructive, so consent must be explicit.
+
+    Interactively that means typing the folder name; in a script it means
+    --yes. Neither can reach the demo or a home directory.
+    """
     if w.is_demo:
         raise UserError(t("del.nodemo"), t("del.nodemo.hint"))
     target = w.root
@@ -966,11 +984,17 @@ def cmd_delete(w):
     out()
     out(red(t("del.warn", path=target)))
     out(t("del.contents", n=w.counts()["notes"]))
-    out()
-    typed = ask(t("del.type", name=target.name))
-    if typed != target.name:
-        out(t("del.cancelled"))
-        return 1
+    if not assume_yes:
+        if not sys.stdin.isatty():
+            # nobody is there to type the name; do not prompt into the void
+            out()
+            out(red(t("del.needsyes")))
+            return 1
+        out()
+        typed = ask(t("del.type", name=target.name))
+        if typed != target.name:
+            out(t("del.cancelled"))
+            return 1
     shutil.rmtree(target)
     if str(config.load().get("workspace") or "") == str(target):
         config.set_(workspace=None)
@@ -1182,6 +1206,14 @@ def build_parser():
         .add_argument("path", help="folder holding the workspace")
     sub.add_parser("forget", help="stop using the current workspace (keeps files)")
 
+    wsp = sub.add_parser("workspace", help="show, stop using, or delete a workspace")
+    wsub = wsp.add_subparsers(dest="wcmd")
+    wsub.add_parser("forget", help="stop using the current workspace (keeps files)")
+    wdel = wsub.add_parser("delete", help="delete a workspace from disk")
+    wdel.add_argument("path", help="the workspace to delete")
+    wdel.add_argument("--yes", action="store_true",
+                      help="consent, instead of typing the folder name")
+
     s = sub.add_parser("search", help="find notes by word or phrase")
     s.add_argument("query", nargs="+")
     s.add_argument("-w", "--workspace")
@@ -1205,6 +1237,8 @@ def build_parser():
     ig.add_argument("--max-files", type=int, default=ingest.DEFAULT_MAX_FILES)
     ig.add_argument("-w", "--workspace")
 
+    sub.add_parser("status", help="where things stand: projects, recent, pending") \
+        .add_argument("-w", "--workspace")
     sub.add_parser("projects", help="list projects and how far each has got") \
         .add_argument("-w", "--workspace")
 
@@ -1250,6 +1284,12 @@ def dispatch(args):
         return cmd_demo(args.path, args.reset)
     if args.cmd == "forget":
         return cmd_forget()
+    if args.cmd == "workspace":
+        if args.wcmd == "forget":
+            return cmd_forget()
+        if args.wcmd == "delete":
+            return cmd_delete(resolve_ws(args.path), assume_yes=args.yes)
+        return cmd_workspace_show()
     if args.cmd == "init":
         return cmd_init(args.path, args.name)
     if args.cmd == "open":
@@ -1268,6 +1308,8 @@ def dispatch(args):
     if args.cmd == "ingest":
         return cmd_ingest(resolve_ws(args.workspace), args.path, args.name,
                           args.dry_run, args.max_files)
+    if args.cmd == "status":
+        return show_status(resolve_ws(args.workspace))
     if args.cmd == "projects":
         return cmd_projects(resolve_ws(args.workspace))
     if args.cmd == "connect":

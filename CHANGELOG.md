@@ -94,6 +94,14 @@ work history -> EKSB -> selective retrieval -> AI agent -> work
   *Delete* asks you to type the folder name, refuses your home directory, and
   is never offered for the demo, which offers *Reset* instead.
 
+- **`eksb status`** — the menu's "Where things stand" as a command.
+- **`eksb workspace`** — `forget` and `delete PATH [--yes]`, so the two
+  removals in Manage workspaces are scriptable too. Without `--yes` in a
+  non-interactive session it refuses rather than prompting into a closed
+  stdin.
+- Picking a search result in the menu now shows the note itself as well as
+  its provenance — `eksb get`'s guided equivalent.
+
 ### Changed
 
 - The repository is now a Python project rather than a vault. Framework
@@ -103,6 +111,11 @@ work history -> EKSB -> selective retrieval -> AI agent -> work
   can check any workspace rather than only the repository.
 - The generic fixture became the demo workspace. Its notes now live in the
   folders their types require, so it validates with zero warnings.
+
+- **Surface parity is now a rule, and a test.** Every ordinary capability has
+  both a guided path and a command; three commands are declared command-only
+  with a reason (`validate`, `get`, `mcp`). Adding a capability to one surface
+  and forgetting the other fails the suite.
 
 ### Not included
 

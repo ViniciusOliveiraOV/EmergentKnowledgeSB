@@ -1090,6 +1090,7 @@ def test_forget_with_nothing_set_says_so(isolated):
 
 def test_deleting_a_workspace_needs_the_name_typed(isolated, monkeypatch):
     mine = seeded(isolated)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)   # someone is there
 
     feed(monkeypatch, ["not the name"])
     code = cli.cmd_delete(ws.Workspace(mine))
@@ -1146,3 +1147,134 @@ def test_manage_workspaces_offers_reset_for_the_demo_and_delete_otherwise(
         text = buf.getvalue()
         assert "Stop using the current workspace" in text
         assert wanted in text and unwanted not in text
+
+
+# -- two surfaces over one implementation --------------------------------
+#
+# Every ordinary human capability has a guided path. Every guided capability
+# worth automating has a command. Infrastructure needs no menu entry.
+#
+# The pairs below are the contract. A capability added to one surface and
+# forgotten on the other fails here.
+HUMAN_CAPABILITIES = [
+    # (what it is,            CLI command,  menu key)
+    ("try the demo",          "demo",       "demo"),
+    ("create a workspace",    "init",       "create"),
+    ("open a workspace",      "open",       "open"),
+    ("stop using one",        "forget",     "forget"),
+    ("delete one",            "workspace",  "delete"),
+    ("reset the demo",        "demo",       "reset"),
+    ("search",                "search",     "search"),
+    ("provenance",            "provenance", "provenance"),
+    ("what needs attention",  "attention",  "attention"),
+    ("where things stand",    "status",     "continue"),
+    ("add a note",            "add",        "note"),
+    ("keep a conversation",   "save",       "source"),
+    ("add a project",         "ingest",     "add"),
+    ("list projects",         "projects",   "list"),
+    ("connect an assistant",  "connect",    "connect"),
+    ("check the workspace",   "doctor",     "health"),
+    ("settings",              "config",     "settings"),
+    ("what runs, where data lives", "about", "learn"),
+]
+
+# Deliberately command-only. Power-user or machine-facing: a normal user
+# meets these through a guided action, never as a task of their own.
+COMMAND_ONLY = {
+    "validate",   # "Check my workspace" reports what it finds, in plain words
+    "get",        # reachable from search results, which is where you want it
+    "mcp",        # an AI client starts this; it is not a human workflow
+}
+
+
+def cli_commands():
+    import argparse as _a
+    parser = cli.build_parser()
+    sub = next(a for a in parser._actions if isinstance(a, _a._SubParsersAction))
+    return set(sub.choices)
+
+
+def menu_keys():
+    """Every key any menu can return, gathered from the source of the menus."""
+    import re as _re
+    src = Path(cli.__file__).read_text(encoding="utf-8")
+    return set(_re.findall(r'\("([a-z_]+)", t\("(?:menu|first|mw|proj|add|save)\.',
+                           src))
+
+
+def test_every_human_capability_has_both_surfaces():
+    commands, keys = cli_commands(), menu_keys()
+    missing = [(what, cmd, key) for what, cmd, key in HUMAN_CAPABILITIES
+               if cmd not in commands or key not in keys]
+    assert not missing, "capability missing a surface: " + repr(missing)
+
+
+def test_command_only_surfaces_are_deliberate():
+    """A command with no guided path must be on the list, with a reason."""
+    commands = cli_commands()
+    paired = {cmd for _, cmd, _ in HUMAN_CAPABILITIES}
+    unaccounted = commands - paired - COMMAND_ONLY
+    assert not unaccounted, (
+        f"{sorted(unaccounted)} has no guided path and is not declared "
+        f"command-only. Add a menu entry, or add it to COMMAND_ONLY with a "
+        f"reason.")
+
+
+def test_no_menu_entry_without_an_implementation():
+    """The other direction: every key a menu can return is handled somewhere."""
+    import re as _re
+    src = Path(cli.__file__).read_text(encoding="utf-8")
+    handled = set(_re.findall(r'pick == "([a-z_]+)"', src))
+    handled |= {"exit"}                     # handled before dispatch, by name
+    offered = menu_keys()
+    assert offered <= handled, (
+        f"offered but never handled: {sorted(offered - handled)}")
+
+
+def test_status_command_matches_the_menu_screen(isolated):
+    """Same implementation behind both, so they cannot drift apart."""
+    mine = seeded(isolated)
+    run("ingest", str(a_project(isolated / "proj")), "--name", "Atlas",
+        "-w", str(mine))
+    code, out = run("status", "-w", str(mine))
+    assert code == 0
+    assert "Where things stand" in out
+    assert "Atlas" in out and "indexed" in out
+    assert "Projects: 1" in out
+
+
+def test_workspace_subcommands_mirror_the_menu(isolated):
+    mine = seeded(isolated)
+
+    code, out = run("workspace")
+    assert code == 0 and str(mine) in out
+
+    code, out = run("workspace", "forget")
+    assert code == 0 and "no longer using" in out
+    assert mine.is_dir() and not config.load()["workspace"]
+
+    # deleting from a script needs explicit consent, and only that
+    code, out = run("workspace", "delete", str(mine))
+    assert code == 1 and mine.is_dir()            # no --yes, no typed name
+    assert "--yes" in out                          # and it says what is missing
+    code, out = run("workspace", "delete", str(mine), "--yes")
+    assert code == 0 and not mine.exists()
+
+
+def test_workspace_delete_still_refuses_the_demo_even_with_yes(isolated):
+    run("demo", str(isolated / "demo"))
+    code, out = run("workspace", "delete", str(isolated / "demo"), "--yes")
+    assert code == 1
+    assert "cannot be deleted here" in out
+    assert (isolated / "demo").is_dir()
+
+
+def test_search_results_open_the_note_itself(isolated, monkeypatch):
+    """`get` from the menu: pick a result and read it, not just its sources."""
+    run("demo", str(isolated / "demo"))
+    config.set_(onboarded=True, lang="en", workspace=str(isolated / "demo"))
+    feed(monkeypatch, ["2", "partitioning", "1"])   # Search the demo -> first hit
+    code, out = run()
+    assert code == 0
+    assert "## Definition" in out                    # the note's own body
+    assert "Came from" in out                        # and its provenance
