@@ -260,7 +260,10 @@ class Server:
         w = self.w
         counts = w.counts()
         errors, warnings, n = validate(w.root)
+        demo = {"is_demo_sandbox": True, "writable": False,
+                "note": candidates.DEMO_REASON} if w.is_demo else {}
         return {
+            **demo,
             "workspace": str(w.root), "name": w.name,
             "notes": counts["notes"], "relations": counts["relations"],
             "broken_references": counts["broken"],
@@ -281,6 +284,9 @@ class Server:
                                 dry_run=bool(dry_run))
         except ws.WorkspaceError as e:
             reason, _, detail = str(e).partition(":")
+            if reason == "demo-readonly":
+                return {"ok": False, "reason": candidates.DEMO_REASON,
+                        "demo_workspace": detail}
             return {"ok": False, "reason": reason, "detail": detail}
         d = rep.as_dict()
         d["ok"] = True
@@ -291,7 +297,10 @@ class Server:
     def t_eksb_submit_candidate(self, **cand) -> dict:
         outcome = candidates.submit(self.w, cand, asserted_by=self.client or "agent")
         d = outcome.as_dict()
-        if outcome.action in ("CONFLICT", "REVIEW_REQUIRED"):
+        if d.get("reason") == candidates.DEMO_REASON:
+            d["next"] = ("Not written. Tell the user this is the demo, and that "
+                         "`eksb init <path>` creates a workspace of their own.")
+        elif outcome.action in ("CONFLICT", "REVIEW_REQUIRED"):
             d["next"] = ("Not written. Put this one question to the user in "
                          "plain language, then act on their answer.")
         elif outcome.action == "REJECTED":

@@ -104,6 +104,10 @@ the point:
   schema the CLI enforces.
 - **It cannot overwrite what you wrote.** An update appends to the Claims
   section; existing text is never touched.
+- **It cannot write into the demo.** The bundled demo is a fixed sandbox:
+  readable, never writable. `eksb_workspace_status` reports
+  `is_demo_sandbox`, so a well-behaved assistant tells you to create your own
+  workspace rather than retrying.
 - **It cannot resolve an ambiguity on your behalf.** A candidate that
   contradicts a superseded position, replaces an existing note, or traces to
   nothing goes to the review queue with one plain-language question.

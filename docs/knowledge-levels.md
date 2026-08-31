@@ -20,6 +20,9 @@ cannot mistake a pile of indexed files for settled knowledge.
 eksb ingest ~/Projects/atlas --name Atlas
 ```
 
+This refuses to run against the bundled demo, which is a fixed sandbox —
+create your own workspace with `eksb init` first.
+
 Creates one `type: project` note recording where the project lives. That is
 all it establishes: a name and a path.
 

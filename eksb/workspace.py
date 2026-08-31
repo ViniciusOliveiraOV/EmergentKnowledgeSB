@@ -83,6 +83,12 @@ class WorkspaceError(Exception):
     """Something the user can fix, phrased for the user by the caller."""
 
 
+def refuse_if_demo(w: "Workspace") -> None:
+    """Guard every write path. The demo is fiction; real work must not join it."""
+    if w.is_demo:
+        raise WorkspaceError(f"demo-readonly:{w.root}")
+
+
 def find(start: Path | None = None) -> Path | None:
     """Nearest workspace at or above `start`. None if there is none."""
     p = (start or Path.cwd()).resolve()
@@ -105,13 +111,28 @@ class Workspace:
         self.root = Path(self.root).resolve()
 
     @property
-    def name(self) -> str:
+    def meta(self) -> dict:
         try:
             import yaml
-            meta = yaml.safe_load((self.root / MARKER).read_text(encoding="utf-8"))
-            return str((meta or {}).get("name") or self.root.name)
+            return yaml.safe_load((self.root / MARKER).read_text(encoding="utf-8")) or {}
         except Exception:
-            return self.root.name
+            return {}
+
+    @property
+    def name(self) -> str:
+        return str(self.meta.get("name") or self.root.name)
+
+    @property
+    def is_demo(self) -> bool:
+        """The bundled sandbox. Readable, never writable — real work must not
+        end up mixed into fiction just because the demo was opened first."""
+        if self.meta.get("demo") is True:
+            return True
+        from . import config          # also catches demos installed before the flag
+        try:
+            return self.root == Path(config.demo_dir()).expanduser().resolve()
+        except OSError:
+            return False
 
     @property
     def notes(self) -> list[Note]:
@@ -268,7 +289,7 @@ def install_demo(path: Path) -> Workspace:
         (path / d).mkdir(exist_ok=True)
     shutil.copytree(DATA / "scaffold" / "_templates", path / "_templates",
                     dirs_exist_ok=True)
-    _write_marker(path, "EKSB Demo — Project Atlas")
+    _write_marker(path, "EKSB Demo — Project Atlas", demo=True)
     return Workspace(path)
 
 
@@ -276,12 +297,14 @@ def _only_hidden(path: Path) -> bool:
     return all(p.name.startswith(".") for p in path.iterdir())
 
 
-def _write_marker(path: Path, name: str) -> None:
+def _write_marker(path: Path, name: str, demo: bool = False) -> None:
     (path / "_system").mkdir(parents=True, exist_ok=True)
+    extra = ("demo: true   # sandbox: readable, but real work belongs elsewhere\n"
+             if demo else "")
     (path / MARKER).write_text(
         "# Marks this directory as an EKSB workspace.\n"
         f'name: "{name}"\n'
-        "schema_version: 1\n", encoding="utf-8")
+        "schema_version: 1\n" + extra, encoding="utf-8")
 
 
 # -- writing -------------------------------------------------------------
@@ -317,6 +340,7 @@ ADDABLE = ("concept", "principle", "question", "decision", "project")
 
 def add_note(w: Workspace, type_: str, title: str) -> Path:
     """Create a note of `type_`, pre-filled from the workspace's template."""
+    refuse_if_demo(w)
     if type_ not in TYPES:
         raise WorkspaceError(f"unknown-type:{type_}")
     folder = sorted(TYPES[type_][1])[0] or "."
@@ -350,6 +374,7 @@ def save_source(w: Workspace, src: Path, title: str | None = None,
     The body is copied unchanged and hashed, so a later edit to raw history
     is detectable by `eksb validate`.
     """
+    refuse_if_demo(w)
     src = Path(src).expanduser()
     if not src.is_file():
         raise WorkspaceError(f"no-file:{src}")

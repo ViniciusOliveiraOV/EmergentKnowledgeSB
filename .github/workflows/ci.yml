@@ -187,6 +187,28 @@ jobs:
           grep -q "REJECTED" guard.txt
           grep -q "may not assert user_position" guard.txt
 
+      # the dogfood bug: the demo becomes the default workspace, and the next
+      # `eksb ingest` silently files a real project into the fiction
+      - name: Real work cannot be written into the demo
+        shell: bash
+        run: |
+          mkdir -p real/docs && printf '# Real\n\nPrivate.\n' > real/README.md
+          eksb demo                                   # demo becomes the default
+          eksb search partitioning | grep -q "Time-Range"   # reads still work
+          eksb ingest real > dg.txt 2>&1 && exit 1
+          cat dg.txt
+          grep -q "This is the demo workspace" dg.txt
+          grep -q "eksb init" dg.txt
+          ! grep -q "Traceback" dg.txt
+          eksb add "Real Decision" > dg2.txt 2>&1 && exit 1
+          grep -q "This is the demo workspace" dg2.txt
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"eksb_submit_candidate","arguments":{"title":"Real","claims":[{"text":"x","epistemic":"source_claim","source":"s"}],"sources":["s"]}}}' \
+            | eksb mcp > dg3.txt
+          grep -q "REJECTED" dg3.txt
+          grep -q "demo workspace" dg3.txt
+          eksb doctor | grep -q "DEMO"
+          eksb validate
+
       - name: Connect prints a usable client configuration
         shell: bash
         run: |

@@ -152,6 +152,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "claim from outside, an unendorsed suggestion, and an open question."
     ),
     "demo.try": "Try:",
+    "demo.label": "DEMO",
+    "demo.readonly": ("This is the demo workspace. Create or open your own "
+                      "workspace before adding real projects or knowledge."),
+    "demo.readonly.hint": "eksb init {path}",
 
     # -- search -------------------------------------------------------
     "search.prompt": "Search for",
@@ -427,6 +431,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "afirmação externa, uma sugestão não endossada e uma pergunta aberta."
     ),
     "demo.try": "Experimente:",
+    "demo.label": "DEMONSTRAÇÃO",
+    "demo.readonly": ("Este é o workspace de demonstração. Crie ou abra seu "
+                      "próprio workspace antes de adicionar projetos ou "
+                      "conhecimento reais."),
+    "demo.readonly.hint": "eksb init {path}",
 
     "search.prompt": "Buscar por",
     "search.none": "Nada corresponde a \"{q}\".",

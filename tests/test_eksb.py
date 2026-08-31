@@ -179,6 +179,7 @@ def test_every_ui_string_is_translated():
                "doc.workspace", "ws.current",      # "workspace" is used as-is in pt-BR
                "product.name",                     # the product's name, not a phrase
                "conn.where",                       # a command to type, verbatim
+               "demo.readonly.hint",               # a command to type, verbatim
                "lang.choose", "no", "learn.docs.body"}
     assert same <= allowed, same - allowed
 
@@ -438,6 +439,18 @@ def test_ingest_dry_run_writes_nothing(isolated):
     assert not list((w_path / "_sources").glob("*.md"))
 
 
+def seeded(isolated):
+    """A workspace of the user's own, holding the demo's notes. Writable."""
+    import shutil as _sh
+    target = isolated / "mine"
+    run("init", str(target))
+    for folder in ("concepts", "decisions", "_sources"):
+        src = ws.DATA / "demo" / folder
+        if src.is_dir():
+            _sh.copytree(src, target / folder, dirs_exist_ok=True)
+    return target
+
+
 # -- MCP ------------------------------------------------------------------
 def mcp_session(root, *calls, client="test-agent"):
     """Drive the real server over a pipe, as a client would. Returns results."""
@@ -523,8 +536,8 @@ def test_mcp_ingest_then_status_says_indexed_not_integrated(isolated):
 
 # -- the boundary that matters -------------------------------------------
 def test_agent_cannot_record_its_claim_as_the_users_position(isolated):
-    run("demo", str(isolated / "demo"))
-    _, res = mcp_session(isolated / "demo", ("eksb_submit_candidate", {
+    mine = seeded(isolated)
+    _, res = mcp_session(mine, ("eksb_submit_candidate", {
         "title": "Shard By Tenant Again",
         "claims": [{"text": "Tenant sharding is the right call after all.",
                     "epistemic": "user_position",
@@ -533,12 +546,12 @@ def test_agent_cannot_record_its_claim_as_the_users_position(isolated):
 
     assert res["action"] == "REJECTED"
     assert "may not assert user_position" in res["reason"]
-    assert not list((isolated / "demo" / "concepts").glob("Shard By Tenant*"))
+    assert not list((mine / "concepts").glob("Shard By Tenant*"))
 
 
 def test_agent_write_lands_as_a_proposal_not_a_belief(isolated):
-    run("demo", str(isolated / "demo"))
-    _, res = mcp_session(isolated / "demo", ("eksb_submit_candidate", {
+    mine = seeded(isolated)
+    _, res = mcp_session(mine, ("eksb_submit_candidate", {
         "type": "concept", "title": "Retention Window Policy",
         "summary": "How long event data is kept.",
         "claims": [{"text": "Retention is 90 days on the events table.",
@@ -552,26 +565,25 @@ def test_agent_write_lands_as_a_proposal_not_a_belief(isolated):
     assert "epistemic_default: assistant_hypothesis" in text
     assert "#e/source_claim" in text
     assert "#e/user_position" not in text
-    assert not validate(isolated / "demo")[0]      # an agent cannot write invalid notes
+    assert not validate(mine)[0]                   # an agent cannot write invalid notes
 
 
 def test_agent_claim_with_no_source_goes_to_review(isolated):
-    run("demo", str(isolated / "demo"))
-    _, res = mcp_session(isolated / "demo", ("eksb_submit_candidate", {
+    mine = seeded(isolated)
+    _, res = mcp_session(mine, ("eksb_submit_candidate", {
         "title": "Ungrounded Idea",
         "claims": [{"text": "We should rewrite it in Rust.",
                     "epistemic": "assistant_hypothesis"}]}))
 
     assert res["action"] == "REVIEW_REQUIRED" and not res["applied"]
     assert res["question"].endswith("Nothing was proposed as its source.")
-    queue = (isolated / "demo" / "dashboards" / "Review Queue.md").read_text(
-        encoding="utf-8")
+    queue = (mine / "dashboards" / "Review Queue.md").read_text(encoding="utf-8")
     assert "Ungrounded Idea" in queue
 
 
 def test_conflict_asks_one_plain_question(isolated):
-    run("demo", str(isolated / "demo"))
-    _, res = mcp_session(isolated / "demo", ("eksb_submit_candidate", {
+    mine = seeded(isolated)
+    _, res = mcp_session(mine, ("eksb_submit_candidate", {
         "title": "Tenant Sharding",
         "claims": [{"text": "Tenant sharding is back on the table.",
                     "epistemic": "assistant_hypothesis",
@@ -587,11 +599,11 @@ def test_conflict_asks_one_plain_question(isolated):
 
 
 def test_update_appends_and_never_overwrites(isolated):
-    run("demo", str(isolated / "demo"))
-    note = isolated / "demo" / "concepts" / "Read Latency Is The Constraint.md"
+    mine = seeded(isolated)
+    note = mine / "concepts" / "Read Latency Is The Constraint.md"
     before = note.read_text(encoding="utf-8")
 
-    _, res = mcp_session(isolated / "demo", ("eksb_submit_candidate", {
+    _, res = mcp_session(mine, ("eksb_submit_candidate", {
         "title": "Read Latency Is The Constraint",
         "claims": [{"text": "p99 read latency is the number that is tracked.",
                     "epistemic": "source_claim",
@@ -603,26 +615,26 @@ def test_update_appends_and_never_overwrites(isolated):
     for line in before.splitlines():
         assert line in after                        # nothing was removed
     assert "p99 read latency" in after
-    assert not validate(isolated / "demo")[0]
+    assert not validate(mine)[0]
 
 
 def test_resubmitting_the_same_claim_is_a_no_op(isolated):
-    run("demo", str(isolated / "demo"))
+    mine = seeded(isolated)
     cand = ("eksb_submit_candidate", {
         "title": "Read Latency Is The Constraint",
         "claims": [{"text": "p99 read latency is the number that is tracked.",
                     "epistemic": "source_claim",
                     "source": "src-20260826-demo-conversation-01"}],
         "sources": ["src-20260826-demo-conversation-01"]})
-    _, first, second = mcp_session(isolated / "demo", cand, cand)
+    _, first, second = mcp_session(mine, cand, cand)
     assert first["action"] == "UPDATE"
     assert second["action"] == "NO_OP" and not second["applied"]
 
 
 def test_agent_cannot_invent_a_relation_or_a_source(isolated):
-    run("demo", str(isolated / "demo"))
+    mine = seeded(isolated)
     _, bad_rel, bad_src = mcp_session(
-        isolated / "demo",
+        mine,
         ("eksb_submit_candidate", {
             "title": "X", "claims": [{"text": "a", "epistemic": "inference",
                                       "source": "src-20260826-demo-conversation-01"}],
@@ -640,11 +652,11 @@ def test_agent_cannot_invent_a_relation_or_a_source(isolated):
 # -- the whole point ------------------------------------------------------
 def test_knowledge_outlives_the_session_that_produced_it(isolated):
     """Model A writes; model B, a separate session, inherits it."""
-    run("demo", str(isolated / "demo"))
+    mine = seeded(isolated)
 
     # --- session A: reads the history, works, writes back what it learned
     _, seen, written = mcp_session(
-        isolated / "demo",
+        mine,
         ("eksb_search", {"query": "partitioning"}),
         ("eksb_submit_candidate", {
             "type": "decision", "title": "Cap Retention At 90 Days",
@@ -660,7 +672,7 @@ def test_knowledge_outlives_the_session_that_produced_it(isolated):
 
     # --- session B: a different client, a different process-worth of state
     _, found, prov = mcp_session(
-        isolated / "demo",
+        mine,
         ("eksb_search", {"query": "retention"}),
         ("eksb_provenance", {"id": "Cap Retention At 90 Days"}),
         client="model-b")
@@ -673,8 +685,7 @@ def test_knowledge_outlives_the_session_that_produced_it(isolated):
     assert prov["points_at"][0]["target"] == "Time-Range Partitioning"
 
     # the human, in their own terminal, sees the same thing
-    code, out = run("provenance", "Cap Retention At 90 Days", "-w",
-                    str(isolated / "demo"))
+    code, out = run("provenance", "Cap Retention At 90 Days", "-w", str(mine))
     assert code == 0 and "a source says it" in out
 
 
@@ -700,3 +711,129 @@ def test_mcp_survives_a_bad_request(isolated):
     lines = sink.getvalue().splitlines()
     assert len(lines) == 3 and '"error"' in lines[0] and '"error"' in lines[1]
     assert '"result"' in lines[2]              # still serving after two bad messages
+
+
+# -- the demo is a sandbox, not a place to put real work -----------------
+def test_demo_stays_readable(isolated):
+    """Every read path keeps working. The guard is on writes only."""
+    run("demo", str(isolated / "demo"))
+    demo = str(isolated / "demo")
+    expect = {
+        ("search", "partitioning", "-w", demo): "Time-Range Partitioning",
+        ("get", "Time-Range Partitioning", "-w", demo): "Definition",
+        ("provenance", "Time-Range Partitioning", "-w", demo): "you said it",
+        ("attention", "-w", demo): "Open questions",
+        ("validate", demo): "0 errors",
+        ("doctor", demo): "EKSB is ready",
+        ("about", demo): "Nothing runs in the background",
+    }
+    for argv, wanted in expect.items():
+        code, out = run(*argv)
+        assert code == 0, (argv, out)
+        assert wanted in out, (argv, out)
+
+
+def test_ingest_into_the_demo_is_refused(isolated):
+    """The reported bug: a real project silently joining the fiction."""
+    run("demo", str(isolated / "demo"))
+    proj = a_project(isolated / "proj")
+
+    code, out = run("ingest", str(proj), "-w", str(isolated / "demo"))
+    assert code == 1
+    assert "This is the demo workspace." in out
+    assert "eksb init" in out
+    assert "Traceback" not in out
+    # nothing of the real project reached it
+    assert not list((isolated / "demo" / "_sources").glob("*Atlas*"))
+    assert not list((isolated / "demo" / "projects").glob("*.md"))
+    assert not validate(isolated / "demo")[0]
+
+
+def test_add_and_save_into_the_demo_are_refused(isolated):
+    run("demo", str(isolated / "demo"))
+    demo = str(isolated / "demo")
+
+    code, out = run("add", "My Real Decision", "-w", demo)
+    assert code == 1 and "This is the demo workspace." in out
+    assert not list((isolated / "demo" / "concepts").glob("My Real*"))
+
+    src = isolated / "chat.md"
+    src.write_text("Me: something real.\n", encoding="utf-8")
+    code, out = run("save", str(src), "-w", demo)
+    assert code == 1 and "This is the demo workspace." in out
+    assert not list((isolated / "demo" / "_sources").glob("chat*"))
+
+
+def test_mcp_writeback_into_the_demo_is_refused(isolated):
+    run("demo", str(isolated / "demo"))
+    _, sub, ing, status = mcp_session(
+        isolated / "demo",
+        ("eksb_submit_candidate", {
+            "title": "Real Thing",
+            "claims": [{"text": "Something true about my actual project.",
+                        "epistemic": "source_claim",
+                        "source": "src-20260826-demo-conversation-01"}],
+            "sources": ["src-20260826-demo-conversation-01"]}),
+        ("eksb_ingest", {"path": str(a_project(isolated / "proj"))}),
+        ("eksb_workspace_status", {}))
+
+    assert sub["action"] == "REJECTED"
+    assert "demo workspace" in sub["reason"]
+    assert "eksb init" in sub["next"] or "eksb init" in sub["reason"]
+    assert ing["ok"] is False and "demo workspace" in ing["reason"]
+    # and the agent is told, so it can explain rather than retry
+    assert status["is_demo_sandbox"] is True and status["writable"] is False
+
+    assert not list((isolated / "demo" / "concepts").glob("Real Thing*"))
+    assert not list((isolated / "demo" / "projects").glob("*.md"))
+
+
+def test_the_users_own_workspace_stays_writable(isolated):
+    """The guard must not leak onto real workspaces."""
+    mine = seeded(isolated)
+    proj = a_project(isolated / "proj")
+
+    assert run("ingest", str(proj), "--name", "Atlas", "-w", str(mine))[0] == 0
+    assert run("add", "My Real Decision", "--type", "decision",
+               "-w", str(mine))[0] == 0
+    src = isolated / "chat.md"
+    src.write_text("Me: something real.\n", encoding="utf-8")
+    assert run("save", str(src), "-w", str(mine))[0] == 0
+
+    _, res = mcp_session(mine, ("eksb_submit_candidate", {
+        "title": "Real Thing",
+        "claims": [{"text": "Something true about my actual project.",
+                    "epistemic": "source_claim",
+                    "source": "src-20260826-demo-conversation-01"}],
+        "sources": ["src-20260826-demo-conversation-01"]}))
+    assert res["action"] == "CREATE" and res["applied"]
+    assert not validate(mine)[0]
+
+
+def test_demo_is_labelled_as_a_demo(isolated):
+    run("demo", str(isolated / "demo"))
+    for argv in (("doctor", str(isolated / "demo")),
+                 ("about", str(isolated / "demo"))):
+        code, out = run(*argv)
+        assert code == 0 and "DEMO" in out, argv
+
+    mine = seeded(isolated)
+    code, out = run("doctor", str(mine))
+    assert code == 0 and "DEMO" not in out
+
+
+def test_demo_guard_speaks_portuguese_too(isolated):
+    run("demo", str(isolated / "demo"))
+    code, out = run("--lang", "pt-BR", "add", "Algo Real",
+                    "-w", str(isolated / "demo"))
+    assert code == 1
+    assert "Este é o workspace de demonstração." in out
+    assert "eksb init" in out
+
+
+def test_a_demo_installed_anywhere_is_still_protected(isolated):
+    """Not just the default location — the content is what makes it a demo."""
+    run("demo", str(isolated / "elsewhere"))
+    assert ws.Workspace(isolated / "elsewhere").is_demo
+    code, out = run("add", "Real", "-w", str(isolated / "elsewhere"))
+    assert code == 1 and "This is the demo workspace." in out

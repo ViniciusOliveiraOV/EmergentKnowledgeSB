@@ -26,7 +26,8 @@ from datetime import date
 from pathlib import Path
 
 from .validate import EPISTEMIC, RELATIONS, TYPES
-from .workspace import (Note, Workspace, _unique, new_id, safe_filename)
+from .workspace import (Note, Workspace, WorkspaceError, _unique, new_id,
+                        refuse_if_demo, safe_filename)
 
 # What an agent is allowed to assert. `user_position` is deliberately absent:
 # only a human can hold a position.
@@ -40,6 +41,10 @@ ACTIONS = ("CREATE", "UPDATE", "LINK", "NO_OP", "CONFLICT", "REVIEW_REQUIRED",
            "REJECTED")
 
 QUEUE = Path("dashboards") / "Review Queue.md"
+
+DEMO_REASON = ("this is the demo workspace, which is a fixed sandbox. Ask the "
+               "user to create or open their own workspace (eksb init <path>) "
+               "before recording anything real.")
 
 
 @dataclass
@@ -222,6 +227,10 @@ def apply(w: Workspace, cand: dict, decision: Outcome) -> Outcome:
 
 def submit(w: Workspace, raw: dict, asserted_by: str = "agent") -> Outcome:
     """normalize -> adjudicate -> apply. The whole writeback path."""
+    try:
+        refuse_if_demo(w)
+    except WorkspaceError:
+        return Outcome("REJECTED", reason=DEMO_REASON)
     try:
         cand = normalize(raw, asserted_by)
     except Rejected as e:

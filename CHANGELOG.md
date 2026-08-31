@@ -68,6 +68,16 @@ work history -> EKSB -> selective retrieval -> AI agent -> work
   development, a Void Linux smoke test, and integration pages for Obsidian
   and AI agents.
 
+### Fixed
+
+- **The demo no longer accepts real data.** Choosing the demo on first run
+  made it the default workspace, so a later `eksb ingest ~/real/project`
+  filed a real project into the fiction, silently. The demo is now a
+  protected sandbox: reads work as before, and `ingest`, `add`, `save` and
+  MCP writeback refuse with a sentence and the command to create a workspace
+  of your own. Nothing is migrated or deleted automatically, and the demo is
+  labelled `DEMO` in `doctor`, `about` and the status screen.
+
 ### Changed
 
 - The repository is now a Python project rather than a vault. Framework

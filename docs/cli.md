@@ -54,6 +54,12 @@ Install the bundled demo workspace and print what to try. `PATH` defaults to
 a folder inside EKSB's own config directory, so it never lands in your
 project. Running it again replaces the demo.
 
+**The demo is a read-only sandbox.** Search, get, provenance, attention,
+validate, doctor and about all work on it. `ingest`, `add`, `save` and MCP
+writeback are refused, with a sentence telling you to create your own
+workspace first — so a real project can never end up filed inside the
+fiction. Nothing is migrated or deleted for you.
+
 ### How a workspace is found
 
 In order: an explicit `-w/--workspace` (or the positional path, where a

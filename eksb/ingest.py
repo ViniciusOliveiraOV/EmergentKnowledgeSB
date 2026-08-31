@@ -22,7 +22,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from .workspace import (Note, Workspace, WorkspaceError, _unique, new_id,
-                        safe_filename, slugify)
+                        refuse_if_demo, safe_filename, slugify)
 
 # Directories that never hold the project's own prose.
 IGNORE_DIRS = {
@@ -150,6 +150,7 @@ def find_project(w: Workspace, ident: str) -> Note | None:
 
 def register(w: Workspace, root: Path, name: str | None = None) -> Note:
     """Level 1. Records where a project is. Idempotent."""
+    refuse_if_demo(w)
     root = Path(root).expanduser().resolve()
     if not root.is_dir():
         raise WorkspaceError(f"no-dir:{root}")

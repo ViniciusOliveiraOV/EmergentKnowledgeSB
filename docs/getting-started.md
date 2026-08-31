@@ -65,6 +65,11 @@ Open questions, claims from outside that nobody has verified, suggestions you
 never confirmed, and positions you have changed. Nothing here is invented —
 every line is derived from what the notes already say.
 
+The demo is a **sandbox**. You can read it however you like, but it will
+refuse to take real work — `ingest`, `add` and `save` are turned off there,
+so your actual project cannot end up mixed into a fictional one. When you
+want to keep something real, make a workspace of your own.
+
 ## Your own workspace
 
 ```

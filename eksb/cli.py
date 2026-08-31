@@ -156,6 +156,14 @@ class UserError(Exception):
         self.hint = hint
 
 
+def demo_guard(w) -> None:
+    """Turn the demo's read-only rule into a sentence with a next step."""
+    if w is not None and w.is_demo:
+        raise UserError(t("demo.readonly"),
+                        t("demo.readonly.hint",
+                          path=Path.home() / "MyEKSB"))
+
+
 def resolve_ws(path=None) -> ws.Workspace:
     """Explicit path > nearest workspace above cwd > configured default."""
     if path:
@@ -319,6 +327,7 @@ def show_attention(w):
 
 
 def cmd_add(w, type_, title):
+    demo_guard(w)
     path = ws.add_note(w, type_, title)
     out()
     out(green(t("add.created", path=path)))
@@ -327,6 +336,7 @@ def cmd_add(w, type_, title):
 
 
 def cmd_save(w, src, title=None, kind="personal_note"):
+    demo_guard(w)
     try:
         path = ws.save_source(w, Path(src), title, kind)
     except ws.WorkspaceError as e:
@@ -369,6 +379,7 @@ LEVEL_KEY = {1: "level.registered", 2: "level.indexed", 3: "level.integrated"}
 
 
 def cmd_ingest(w, path, name=None, dry_run=False, max_files=None):
+    demo_guard(w)
     try:
         rep = ingest.ingest(w, Path(path), name,
                             max_files=max_files or ingest.DEFAULT_MAX_FILES,
@@ -520,6 +531,9 @@ def show_status(w):
     projects = ingest.levels(w)
     rule(t("stat.title"))
     out()
+    if w.is_demo:
+        out("  " + yellow("[" + t("demo.label") + "] " + t("demo.readonly")))
+        out()
     out(f"  {t('stat.projects')}: {bold(str(len(projects)))}"
         f"    {t('stat.items')}: {bold(str(counts['notes']))}")
     for p in projects[:5]:
@@ -601,7 +615,9 @@ def cmd_doctor(path=None):
         w = None
 
     if w:
-        row(t("doc.workspace"), _short(w.root), green(t("doc.ok")))
+        row(t("doc.workspace"),
+            _short(w.root) + (yellow("  [" + t("demo.label") + "]") if w.is_demo else ""),
+            green(t("doc.ok")))
         row(t("doc.schema"), "1", green(t("doc.ok")))
         counts = w.counts()
         row(t("doc.items"), counts["notes"])
@@ -668,6 +684,8 @@ def cmd_about(path=None):
 
     out()
     out(bold(t("about.data")))
+    if w is not None and w.is_demo:
+        out("  " + yellow("[" + t("demo.label") + "] " + t("demo.readonly")))
     out(f"  {t('about.data.ws')}")
     out(f"    {cyan(ws_path)}")
     out(f"  {t('about.data.cfg')}")
@@ -945,47 +963,58 @@ def menu():
         if pick == "exit":
             out(t("bye"))
             return 0
-        elif pick == "continue":
-            show_status(w)
-        elif pick == "project":
-            project_menu(w)
-        elif pick == "connect":
-            cmd_connect(w)
-        elif pick == "search":
-            cmd_search(w, ask(t("search.prompt")), interactive=True)
-        elif pick == "add":
-            add_menu(w)
-        elif pick == "attention":
-            show_attention(w)
-        elif pick == "provenance":
-            q = ask(t("search.prompt"))
-            hits = w.search(q)
-            n = w.get(q) or (hits[0][0] if hits else None)
-            show_provenance(w, n) if n else out(red(t("note.notfound", q=q)))
-        elif pick == "health":
-            cmd_doctor(w.root)
-        elif pick == "about":
-            cmd_about(w.root if w else None)
-        elif pick == "settings":
-            settings_menu()
-        elif pick == "learn":
-            learn_menu()
-        elif pick == "demo":
-            cmd_demo()
-            w = ws.Workspace(config.load()["workspace"])
-        elif pick == "create":
-            cmd_init(ask(t("ws.where"), str(Path.home() / "MyEKSB")))
-            w = ws.Workspace(config.load()["workspace"])
-        elif pick == "open":
-            p = Path(ask(t("ws.path"))).expanduser().resolve()
-            if ws.is_workspace(p):
-                config.set_(workspace=str(p))
-                w = ws.Workspace(p)
-                out(green(t("ws.opened", path=p)))
-            else:
-                out(red(t("ws.notfound", path=p)))
+        try:
+            w = dispatch_menu(pick, w)
+        except UserError as e:          # stay in the menu; say what to do instead
+            out(red(str(e)))
+            if e.hint:
+                out(dim(e.hint))
         out()
         pause()
+
+
+def dispatch_menu(pick, w):
+    """Run one menu choice. Returns the (possibly new) active workspace."""
+    if pick == "continue":
+        show_status(w)
+    elif pick == "project":
+        project_menu(w)
+    elif pick == "connect":
+        cmd_connect(w)
+    elif pick == "search":
+        cmd_search(w, ask(t("search.prompt")), interactive=True)
+    elif pick == "add":
+        add_menu(w)
+    elif pick == "attention":
+        show_attention(w)
+    elif pick == "provenance":
+        q = ask(t("search.prompt"))
+        hits = w.search(q)
+        n = w.get(q) or (hits[0][0] if hits else None)
+        show_provenance(w, n) if n else out(red(t("note.notfound", q=q)))
+    elif pick == "health":
+        cmd_doctor(w.root)
+    elif pick == "about":
+        cmd_about(w.root if w else None)
+    elif pick == "settings":
+        settings_menu()
+    elif pick == "learn":
+        learn_menu()
+    elif pick == "demo":
+        cmd_demo()
+        w = ws.Workspace(config.load()["workspace"])
+    elif pick == "create":
+        cmd_init(ask(t("ws.where"), str(Path.home() / "MyEKSB")))
+        w = ws.Workspace(config.load()["workspace"])
+    elif pick == "open":
+        p = Path(ask(t("ws.path"))).expanduser().resolve()
+        if ws.is_workspace(p):
+            config.set_(workspace=str(p))
+            w = ws.Workspace(p)
+            out(green(t("ws.opened", path=p)))
+        else:
+            out(red(t("ws.notfound", path=p)))
+    return w
 
 
 # -- entry point ---------------------------------------------------------
