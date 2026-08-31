@@ -946,3 +946,203 @@ def test_the_way_out_speaks_portuguese(isolated, monkeypatch):
     assert "Este é o workspace de demonstração." in out
     assert "Quer criar seu próprio workspace agora?" in out
     assert ws.is_workspace(mine)
+
+
+# -- resetting a contaminated demo ---------------------------------------
+def legacy_demo(isolated):
+    """A demo as it exists on a machine that ran EKSB before the write guard:
+    real project material sitting inside the fiction, and no `demo: true`."""
+    demo = isolated / "demo"
+    run("demo", str(demo))
+    marker = demo / "_system" / "workspace.yml"
+    marker.write_text(marker.read_text(encoding="utf-8").replace(
+        "demo: true   # sandbox: readable, but real work belongs elsewhere\n", ""),
+        encoding="utf-8")
+
+    # what the dogfood run actually left behind: an ingested real project
+    (demo / "_sources" / "music2phone — README.md").write_text(
+        "---\nschema_version: 1\ntype: source\ntrack: instance\n"
+        "id: src-20260830-music2phone-readme\n"
+        'title: "music2phone — README.md"\ncreated: 2026-08-30\n'
+        "source_type: project_file\ningested_at: 2026-08-30\n"
+        "ingested_by: eksb-ingest\n---\n\nmusic2phone: sync my library.\n",
+        encoding="utf-8")
+    (demo / "projects" / "music2phone.md").write_text(
+        "---\nschema_version: 1\ntype: project\ntrack: instance\n"
+        "id: prj-20260830-music2phone\ntitle: music2phone\n"
+        "created: 2026-08-30\nproject_root: \"/home/someone/music2phone\"\n---\n\n"
+        "## What this is\n\nmy real project\n", encoding="utf-8")
+    return demo
+
+
+def test_a_pre_guard_demo_is_still_recognised_as_the_demo(isolated):
+    """No flag, and not at the default path: the marker name still gives it away."""
+    demo = legacy_demo(isolated)
+    assert "demo: true" not in (demo / "_system" / "workspace.yml").read_text(
+        encoding="utf-8")
+    assert demo.resolve() != config.demo_dir().resolve()
+    assert ws.Workspace(demo).is_demo
+
+    # so the guard covers it, without anyone having to migrate anything
+    code, out = run("add", "Real", "-w", str(demo))
+    assert code == 1 and "This is the demo workspace." in out
+
+    # and the default location alone is enough even if the marker is gone
+    run("demo")
+    (config.demo_dir() / "_system" / "workspace.yml").write_text(
+        "schema_version: 1\n", encoding="utf-8")
+    assert ws.Workspace(config.demo_dir()).is_demo
+
+
+def test_demo_reset_restores_the_packaged_fixture(isolated):
+    demo = legacy_demo(isolated)
+    assert "music2phone" in " ".join(p.name for p in demo.rglob("*.md"))
+
+    code, out = run("demo", str(demo), "--reset")
+    assert code == 0 and "Demo restored" in out
+
+    names = " ".join(p.name for p in demo.rglob("*.md"))
+    assert "music2phone" not in names                       # contamination gone
+    assert "Time-Range Partitioning" in names               # Project Atlas back
+    assert not list(demo.glob("projects/*.md"))
+
+    errors, warnings, n = validate(demo)
+    assert not errors and not warnings, (errors, warnings)
+    assert n == 7
+
+    # and it still does what a demo is for
+    assert "Time-Range Partitioning" in run("search", "partitioning", "-w", str(demo))[1]
+    assert "you said it" in run("provenance", "Time-Range Partitioning",
+                                "-w", str(demo))[1]
+
+
+def test_demo_is_still_protected_after_a_reset(isolated):
+    demo = legacy_demo(isolated)
+    run("demo", str(demo), "--reset")
+    assert ws.Workspace(demo).is_demo
+    code, out = run("add", "Real Thing", "-w", str(demo))
+    assert code == 1 and "This is the demo workspace." in out
+
+
+def test_reset_never_touches_a_personal_workspace(isolated):
+    """The blast radius must stop at the demo."""
+    demo = legacy_demo(isolated)
+    mine = seeded(isolated)
+    run("ingest", str(a_project(isolated / "proj")), "--name", "Atlas",
+        "-w", str(mine))
+
+    before = {p.relative_to(mine): p.read_bytes()
+              for p in sorted(mine.rglob("*")) if p.is_file()}
+    run("demo", str(demo), "--reset")
+    after = {p.relative_to(mine): p.read_bytes()
+             for p in sorted(mine.rglob("*")) if p.is_file()}
+    assert before == after                      # byte for byte
+
+
+def test_reset_refuses_to_point_at_a_real_workspace(isolated):
+    mine = seeded(isolated)
+    before = sorted(p.name for p in mine.rglob("*.md"))
+    code, out = run("demo", str(mine), "--reset")
+    assert code == 1
+    assert "a workspace of your own, not the demo" in out
+    assert sorted(p.name for p in mine.rglob("*.md")) == before
+
+
+def test_plain_demo_does_not_wipe_an_existing_one(isolated):
+    """`eksb demo` is not a destructive command; only --reset is."""
+    demo = legacy_demo(isolated)
+    code, out = run("demo", str(demo))
+    assert code == 0
+    assert "already set up" in out and "eksb demo --reset" in out
+    assert (demo / "projects" / "music2phone.md").is_file()
+
+
+def test_demo_reset_speaks_portuguese(isolated):
+    demo = legacy_demo(isolated)
+    code, out = run("--lang", "pt-BR", "demo", str(demo), "--reset")
+    assert code == 0 and "Demonstração restaurada" in out
+
+
+# -- stopping, and deleting ----------------------------------------------
+def test_forget_clears_the_reference_and_keeps_every_file(isolated):
+    mine = seeded(isolated)
+    files = {p.relative_to(mine): p.read_bytes()
+             for p in sorted(mine.rglob("*")) if p.is_file()}
+    assert config.load()["workspace"] == str(mine)
+
+    code, out = run("forget")
+    assert code == 0
+    assert "no longer using" in out and "Nothing was deleted" in out
+    assert not config.load()["workspace"]
+
+    assert mine.is_dir()
+    assert {p.relative_to(mine): p.read_bytes()
+            for p in sorted(mine.rglob("*")) if p.is_file()} == files
+    # and it can be picked up again
+    assert run("open", str(mine))[0] == 0
+    assert config.load()["workspace"] == str(mine)
+
+
+def test_forget_with_nothing_set_says_so(isolated):
+    code, out = run("forget")
+    assert code == 1 and "nothing to stop using" in out
+
+
+def test_deleting_a_workspace_needs_the_name_typed(isolated, monkeypatch):
+    mine = seeded(isolated)
+
+    feed(monkeypatch, ["not the name"])
+    code = cli.cmd_delete(ws.Workspace(mine))
+    assert code == 1 and mine.is_dir()          # a wrong answer deletes nothing
+
+    feed(monkeypatch, [""])                     # and so does an empty one
+    assert cli.cmd_delete(ws.Workspace(mine)) == 1 and mine.is_dir()
+
+    feed(monkeypatch, [mine.name])              # only the exact name goes through
+    assert cli.cmd_delete(ws.Workspace(mine)) == 0
+    assert not mine.exists()
+    assert not config.load()["workspace"]       # and the reference is cleared
+
+
+def test_the_demo_cannot_be_deleted_through_the_generic_path(isolated):
+    run("demo", str(isolated / "demo"))
+    with pytest.raises(cli.UserError) as e:
+        cli.cmd_delete(ws.Workspace(isolated / "demo"))
+    assert "cannot be deleted here" in str(e.value)
+    assert (isolated / "demo").is_dir()
+
+
+def test_delete_refuses_the_home_directory(isolated, monkeypatch):
+    home = Path.home()
+    run("init", str(home / "w"))
+    w = ws.Workspace(home / "w")
+    monkeypatch.setattr(w, "root", home, raising=False)
+    with pytest.raises(cli.UserError):
+        cli.cmd_delete(w)
+    assert home.is_dir()
+
+
+def test_manage_workspaces_offers_reset_for_the_demo_and_delete_otherwise(
+        isolated, monkeypatch):
+    config.set_(onboarded=True, lang="en")
+    run("demo", str(isolated / "demo"))
+    feed(monkeypatch, [])                       # just render, then EOF out
+    _, out = run()
+    assert "Manage workspaces" not in out       # it lives under Settings
+
+    for target, wanted, unwanted in (
+            (isolated / "demo", "Reset the demo", "Delete current workspace"),
+            (seeded(isolated), "Delete current workspace", "Reset the demo")):
+        config.set_(workspace=str(target))
+        feed(monkeypatch, [])
+        buf = io.StringIO()
+        old, sys.stdout = sys.stdout, buf
+        try:
+            cli.workspace_menu()
+        except SystemExit:
+            pass
+        finally:
+            sys.stdout = old
+        text = buf.getvalue()
+        assert "Stop using the current workspace" in text
+        assert wanted in text and unwanted not in text

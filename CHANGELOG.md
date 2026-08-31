@@ -84,6 +84,16 @@ work history -> EKSB -> selective retrieval -> AI agent -> work
   is no EKSB workspace at …". The new workspace becomes active immediately;
   nothing is created without consent.
 
+- **`eksb demo --reset`** restores the demo to the packaged fixture. A demo
+  contaminated by an older EKSB — before the sandbox rule existed — is now
+  recoverable in one command. It refuses to run against a workspace of your
+  own, and a plain `eksb demo` no longer overwrites an existing demo.
+- **Settings → Manage workspaces**: create, open another, stop using the
+  current one, and — separately and destructively — delete it from disk.
+  *Stop using* (`eksb forget`) clears the reference and deletes nothing;
+  *Delete* asks you to type the folder name, refuses your home directory, and
+  is never offered for the demo, which offers *Reset* instead.
+
 ### Changed
 
 - The repository is now a Python project rather than a vault. Framework

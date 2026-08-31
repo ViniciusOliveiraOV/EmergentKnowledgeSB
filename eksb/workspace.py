@@ -15,6 +15,7 @@ from pathlib import Path
 from .validate import TAG_RE, TYPES, split_frontmatter, note_paths, validate
 
 MARKER = Path("_system") / "workspace.yml"
+DEMO_NAME = "EKSB Demo — Project Atlas"
 DATA = Path(__file__).resolve().parent / "data"
 
 FOLDERS = ("_sources", "concepts", "references", "decisions", "projects",
@@ -125,10 +126,17 @@ class Workspace:
     @property
     def is_demo(self) -> bool:
         """The bundled sandbox. Readable, never writable — real work must not
-        end up mixed into fiction just because the demo was opened first."""
+        end up mixed into fiction just because the demo was opened first.
+
+        Three signals, because a demo installed before the flag existed still
+        has to be recognised: the flag, the name only `install_demo` writes,
+        and the default location.
+        """
         if self.meta.get("demo") is True:
             return True
-        from . import config          # also catches demos installed before the flag
+        if str(self.meta.get("name") or "") == DEMO_NAME:
+            return True
+        from . import config
         try:
             return self.root == Path(config.demo_dir()).expanduser().resolve()
         except OSError:
@@ -289,7 +297,7 @@ def install_demo(path: Path) -> Workspace:
         (path / d).mkdir(exist_ok=True)
     shutil.copytree(DATA / "scaffold" / "_templates", path / "_templates",
                     dirs_exist_ok=True)
-    _write_marker(path, "EKSB Demo — Project Atlas", demo=True)
+    _write_marker(path, DEMO_NAME, demo=True)
     return Workspace(path)
 
 

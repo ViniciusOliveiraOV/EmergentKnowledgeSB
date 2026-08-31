@@ -739,13 +739,36 @@ def cmd_about(path=None):
     return 0
 
 
-def cmd_demo(path=None):
-    target = Path(path).expanduser() if path else config.demo_dir()
-    out(t("demo.installing"))
-    w = ws.install_demo(target)
-    config.set_(workspace=str(w.root))
-    out()
-    out(green(t("demo.ready", path=w.root)))
+def cmd_demo(path=None, reset=False):
+    """Set up the demo, or restore it to the packaged fixture.
+
+    Only ever touches a demo. A real workspace at the target path is refused,
+    so `--reset` can never be pointed at someone's own work by accident.
+    """
+    target = (Path(path).expanduser() if path else config.demo_dir()).resolve()
+    existing = ws.Workspace(target) if ws.is_workspace(target) else None
+
+    if existing is not None and not existing.is_demo:
+        raise UserError(t("demo.notdemo", path=target))
+
+    if existing is not None and not reset:
+        config.set_(workspace=str(target))
+        out()
+        out(green(t("demo.already", path=target)))
+        out(dim(t("demo.reset.hint")))
+    else:
+        if existing is not None:                 # a reset: say what goes
+            out(yellow(t("demo.reset.warn", path=target)))
+            if sys.stdin.isatty() and not ask_yes(t("demo.reset.confirm")):
+                out(t("demo.reset.cancelled"))
+                return 1
+        out(t("demo.restoring" if existing is not None else "demo.installing"))
+        target = ws.install_demo(target).root
+        config.set_(workspace=str(target))
+        out()
+        out(green(t("demo.restored" if existing is not None else "demo.ready",
+                    path=target)))
+    w = ws.Workspace(target)
     out()
     out(t("demo.what"))
     out()
@@ -920,19 +943,95 @@ def learn_menu():
         pause()
 
 
+def cmd_forget():
+    """Stop using a workspace. Clears the reference; touches no files."""
+    saved = config.load().get("workspace")
+    if not saved:
+        out(dim(t("ws.forget.none")))
+        return 1
+    config.set_(workspace=None)
+    out(green(t("ws.forgotten", path=saved)))
+    out(dim(t("ws.forget.safe")))
+    return 0
+
+
+def cmd_delete(w):
+    """Delete a workspace from disk. Destructive, so consent must be typed."""
+    if w.is_demo:
+        raise UserError(t("del.nodemo"), t("del.nodemo.hint"))
+    target = w.root
+    if target == Path.home() or target.parent == target:
+        raise UserError(t("del.refused", path=target))
+
+    out()
+    out(red(t("del.warn", path=target)))
+    out(t("del.contents", n=w.counts()["notes"]))
+    out()
+    typed = ask(t("del.type", name=target.name))
+    if typed != target.name:
+        out(t("del.cancelled"))
+        return 1
+    shutil.rmtree(target)
+    if str(config.load().get("workspace") or "") == str(target):
+        config.set_(workspace=None)
+    out(green(t("del.done", path=target)))
+    return 0
+
+
+def workspace_menu():
+    while True:
+        try:
+            w = resolve_ws()
+        except UserError:
+            w = None
+        rule(t("mw.title"))
+        out()
+        out(f"  {t('ws.current')}: "
+            + (bold(str(w.root)) + (yellow("  [" + t("demo.label") + "]")
+                                    if w.is_demo else "")
+               if w else dim(t("doc.none"))))
+
+        options = [("create", t("mw.create")), ("open", t("mw.open"))]
+        if w:
+            options.append(("forget", t("mw.forget")))
+            # one destructive action, and never the wrong one for this workspace
+            options.append(("reset", t("mw.reset")) if w.is_demo
+                           else ("delete", t("mw.delete")))
+        pick = choose(t("mw.what"), options, allow_back=True)
+        if pick is None:
+            return
+        try:
+            if pick == "create":
+                open_or_create(t("ws.where"), assume_create=True)
+            elif pick == "open":
+                open_or_create()
+            elif pick == "forget":
+                cmd_forget()
+            elif pick == "reset":
+                cmd_demo(w.root, reset=True)
+            elif pick == "delete":
+                cmd_delete(w)
+        except UserError as e:
+            out(red(str(e)))
+            if e.hint:
+                out(dim(e.hint))
+        out()
+        pause()
+
+
 def settings_menu():
     while True:
         cmd_config(argparse.Namespace(set_lang=None, set_workspace=None))
         pick = choose(t("set.title"), [
             ("lang", t("set.changelang")),
-            ("ws", t("set.changews")),
+            ("ws", t("set.manage")),
         ], allow_back=True)
         if pick is None:
             return
         if pick == "lang":
             pick_language(force=True)
         else:
-            open_or_create()
+            workspace_menu()
 
 
 def project_menu(w):
@@ -978,6 +1077,7 @@ def menu():
                         ("add", t("menu.add")),
                         ("create", t("first.create")),
                         ("open", t("first.open")),
+                        ("reset", t("mw.reset")),
                         ("connect", t("menu.connect"))]
         elif w:
             options += [("continue", t("menu.continue")),
@@ -1019,6 +1119,9 @@ def dispatch_menu(pick, w):
         show_status(w)
     elif pick == "project":
         project_menu(w)
+    elif pick == "reset":
+        cmd_demo(w.root, reset=True)
+        w = ws.Workspace(w.root)
     elif pick == "connect":
         cmd_connect(w)
     elif pick == "search":
@@ -1068,13 +1171,16 @@ def build_parser():
                    help="language for this run (en, pt-BR)")
     sub = p.add_subparsers(dest="cmd")
 
-    sub.add_parser("demo", help="set up a demo workspace and show what to try") \
-        .add_argument("path", nargs="?", help="where to put it")
+    dm = sub.add_parser("demo", help="set up a demo workspace and show what to try")
+    dm.add_argument("path", nargs="?", help="where to put it")
+    dm.add_argument("--reset", action="store_true",
+                    help="restore the demo to its original contents")
     i = sub.add_parser("init", help="create a new workspace")
     i.add_argument("path", nargs="?", help="folder for the workspace")
     i.add_argument("--name", help="name for the workspace")
     sub.add_parser("open", help="use an existing workspace by default") \
         .add_argument("path", help="folder holding the workspace")
+    sub.add_parser("forget", help="stop using the current workspace (keeps files)")
 
     s = sub.add_parser("search", help="find notes by word or phrase")
     s.add_argument("query", nargs="+")
@@ -1141,7 +1247,9 @@ def dispatch(args):
         cfg = config.load()
         return menu() if cfg.get("onboarded") else onboarding()
     if args.cmd == "demo":
-        return cmd_demo(args.path)
+        return cmd_demo(args.path, args.reset)
+    if args.cmd == "forget":
+        return cmd_forget()
     if args.cmd == "init":
         return cmd_init(args.path, args.name)
     if args.cmd == "open":

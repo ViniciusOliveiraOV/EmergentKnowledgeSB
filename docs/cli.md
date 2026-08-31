@@ -28,6 +28,17 @@ eksb open PATH
 Remember `PATH` as the default workspace for later commands.
 
 ```
+eksb forget
+```
+
+Stop using the current workspace. Clears EKSB's reference to it and
+**deletes nothing** — reopen it any time with `eksb open`.
+
+Deleting a workspace from disk is deliberately not a flag: it lives in
+Settings → Manage workspaces, and asks you to type the folder name. The demo
+cannot be deleted that way; reset it instead.
+
+```
 eksb ingest PATH [--name NAME] [--dry-run] [--max-files N] [-w PATH]
 ```
 
@@ -47,12 +58,18 @@ Every registered project and how far it has got: registered, indexed, or
 integrated.
 
 ```
-eksb demo [PATH]
+eksb demo [PATH] [--reset]
 ```
 
 Install the bundled demo workspace and print what to try. `PATH` defaults to
 a folder inside EKSB's own config directory, so it never lands in your
-project. Running it again replaces the demo.
+project. Running it again on an existing demo leaves it alone and says so.
+
+`--reset` restores the demo to the packaged fixture, discarding whatever is
+in it. Use it if an older EKSB let real material in before the sandbox rule
+existed. It refuses to run against a workspace of your own, so it can never
+be pointed at real work by mistake, and it asks for confirmation when run
+interactively.
 
 **The demo is a read-only sandbox.** Search, get, provenance, attention,
 validate, doctor and about all work on it. `ingest`, `add`, `save` and MCP
