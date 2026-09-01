@@ -1009,13 +1009,19 @@ def cmd_delete(w, assume_yes=False):
     out(red(t("del.warn", path=target)))
     out(t("del.contents", n=w.counts()["notes"]))
     if not assume_yes:
-        if not sys.stdin.isatty():
-            # nobody is there to type the name; do not prompt into the void
+        typed = None
+        if sys.stdin.isatty():
             out()
-            out(red(t("del.needsyes")))
+            try:
+                typed = ask(t("del.type", name=target.name))
+            except SystemExit:
+                # end of input: on Windows `< /dev/null` still looks like a
+                # terminal, because the CRT calls every character device one
+                typed = None
+        if typed is None:
+            out()
+            out(red(t("del.needsyes")))     # asked nobody; deleted nothing
             return 1
-        out()
-        typed = ask(t("del.type", name=target.name))
         if typed != target.name:
             out(t("del.cancelled"))
             return 1

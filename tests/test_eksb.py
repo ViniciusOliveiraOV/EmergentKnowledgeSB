@@ -1650,3 +1650,17 @@ def test_use_utf8_actually_asks_for_utf8(monkeypatch):
     monkeypatch.setattr(sys, "stdin", Stream())
     use_utf8()
     assert asked == [{"encoding": "utf-8"}] * 3
+
+
+def test_delete_refuses_when_the_answer_never_comes(isolated, monkeypatch):
+    """Windows calls NUL a terminal, so `delete X < /dev/null` reached the
+    prompt and then exited 0 having deleted nothing. End of input is a
+    refusal, not a success."""
+    mine = seeded(isolated)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    feed(monkeypatch, [])                        # the prompt gets EOF
+
+    code = cli.cmd_delete(ws.Workspace(mine))
+    assert code == 1
+    assert mine.is_dir()
+    assert config.load()["workspace"] == str(mine)
