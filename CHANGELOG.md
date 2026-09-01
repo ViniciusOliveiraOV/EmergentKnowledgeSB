@@ -101,6 +101,13 @@ work history -> EKSB -> selective retrieval -> AI agent -> work
   stdin.
 - Picking a search result in the menu now shows the note itself as well as
   its provenance — `eksb get`'s guided equivalent.
+- **`eksb help`** is a command, not an invalid choice. It used to print the
+  list of commands only as part of an argparse error, and exit non-zero.
+  `eksb help COMMAND` explains one — `eksb help ingest`, `eksb help workspace
+  delete`. It is argparse's own help text, asked for the way people ask;
+  a command that does not exist gets a sentence rather than "invalid choice".
+  Each command's one-liner is now its description too, so `eksb help search`
+  says what search is for and not only how to type it.
 - **The guards on the one destructive command now live with the data.**
   `refuse_if_undeletable` sits next to the demo guard in `workspace.py`, so
   the menu, the subcommand and any later caller share one answer. It refuses

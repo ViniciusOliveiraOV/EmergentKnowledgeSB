@@ -46,15 +46,17 @@ entirely.
 | Language, settings | Settings | `eksb config` |
 | What runs, where data lives | Learn more | `eksb about` |
 
-Three commands have no menu entry, deliberately. `eksb validate` is what
+Four commands have no menu entry, deliberately. `eksb validate` is what
 "Check my workspace" reports in plain words; `eksb get` is reached by picking
 a search result; `eksb mcp` is started by an AI client and is not a human
-task. A test enforces this table, so a capability cannot quietly gain one
-surface and not the other.
+task; `eksb help` lists the commands, and the menu is already that list. A
+test enforces this table, so a capability cannot quietly gain one surface and
+not the other.
 
 ```
 eksb                       interactive menu (onboarding on first run)
-eksb --help                short help
+eksb help [COMMAND]        list the commands, or explain one
+eksb --help                the same list
 eksb --version             version
 eksb --debug <cmd>         show the technical error instead of a friendly one
 eksb --lang en|pt-BR <cmd> language for this run only

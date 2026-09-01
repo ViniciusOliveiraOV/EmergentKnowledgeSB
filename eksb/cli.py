@@ -1186,6 +1186,19 @@ def dispatch_menu(pick, w):
     return w
 
 
+def cmd_help(topic):
+    """`eksb help [COMMAND]`. Not a second help text — argparse's own, asked
+    for the way a person expects to ask."""
+    p = build_parser()
+    if topic and topic[0] not in p.subcommands:
+        raise UserError(t("help.unknown", cmd=topic[0]), t("help.hint"))
+    try:
+        p.parse_args(list(topic) + ["--help"])
+    except SystemExit:
+        pass
+    return 0
+
+
 # -- entry point ---------------------------------------------------------
 def build_parser():
     p = argparse.ArgumentParser(
@@ -1199,19 +1212,28 @@ def build_parser():
     p.add_argument("--lang", choices=list(LANGUAGES),
                    help="language for this run (en, pt-BR)")
     sub = p.add_subparsers(dest="cmd")
+    p.subcommands = sub.choices          # so `eksb help X` can check X exists
 
-    dm = sub.add_parser("demo", help="set up a demo workspace and show what to try")
+    def add(name, help):
+        """The one-liner doubles as the description, so `eksb help NAME`
+        says what the command is for and not only how to type it."""
+        return sub.add_parser(name, help=help, description=help)
+
+    h = add("help", help="list the commands, or explain one")
+    h.add_argument("topic", nargs="*", help="a command, e.g. `eksb help ingest`")
+
+    dm = add("demo", help="set up a demo workspace and show what to try")
     dm.add_argument("path", nargs="?", help="where to put it")
     dm.add_argument("--reset", action="store_true",
                     help="restore the demo to its original contents")
-    i = sub.add_parser("init", help="create a new workspace")
+    i = add("init", help="create a new workspace")
     i.add_argument("path", nargs="?", help="folder for the workspace")
     i.add_argument("--name", help="name for the workspace")
-    sub.add_parser("open", help="use an existing workspace by default") \
+    add("open", help="use an existing workspace by default") \
         .add_argument("path", help="folder holding the workspace")
-    sub.add_parser("forget", help="stop using the current workspace (keeps files)")
+    add("forget", help="stop using the current workspace (keeps files)")
 
-    wsp = sub.add_parser("workspace", help="show, stop using, or delete a workspace")
+    wsp = add("workspace", help="show, stop using, or delete a workspace")
     wsub = wsp.add_subparsers(dest="wcmd")
     wsub.add_parser("forget", help="stop using the current workspace (keeps files)")
     wdel = wsub.add_parser("delete", help="delete a workspace from disk")
@@ -1219,22 +1241,22 @@ def build_parser():
     wdel.add_argument("--yes", action="store_true",
                       help="consent, instead of typing the folder name")
 
-    s = sub.add_parser("search", help="find notes by word or phrase")
+    s = add("search", help="find notes by word or phrase")
     s.add_argument("query", nargs="+")
     s.add_argument("-w", "--workspace")
 
-    ad = sub.add_parser("add", help="create a new note")
+    ad = add("add", help="create a new note")
     ad.add_argument("title", nargs="+")
     ad.add_argument("--type", default="concept", choices=list(ws.ADDABLE))
     ad.add_argument("-w", "--workspace")
 
-    sv = sub.add_parser("save", help="keep a conversation or document as a source")
+    sv = add("save", help="keep a conversation or document as a source")
     sv.add_argument("file", help="text or Markdown file to keep")
     sv.add_argument("--title")
     sv.add_argument("--kind", default="personal_note", choices=list(ws.SOURCE_KINDS))
     sv.add_argument("-w", "--workspace")
 
-    ig = sub.add_parser("ingest", help="add a project directory and index its text")
+    ig = add("ingest", help="add a project directory and index its text")
     ig.add_argument("path", help="the project directory")
     ig.add_argument("--name", help="what to call the project")
     ig.add_argument("--dry-run", action="store_true",
@@ -1242,40 +1264,40 @@ def build_parser():
     ig.add_argument("--max-files", type=int, default=ingest.DEFAULT_MAX_FILES)
     ig.add_argument("-w", "--workspace")
 
-    sub.add_parser("status", help="where things stand: projects, recent, pending") \
+    add("status", help="where things stand: projects, recent, pending") \
         .add_argument("-w", "--workspace")
-    sub.add_parser("projects", help="list projects and how far each has got") \
+    add("projects", help="list projects and how far each has got") \
         .add_argument("-w", "--workspace")
 
-    cn = sub.add_parser("connect", help="connect an AI assistant over MCP")
+    cn = add("connect", help="connect an AI assistant over MCP")
     cn.add_argument("--json", action="store_true",
                     help="print only the client configuration")
     cn.add_argument("-w", "--workspace")
 
-    sub.add_parser("mcp", help="run the MCP server (started by an AI client)") \
+    add("mcp", help="run the MCP server (started by an AI client)") \
         .add_argument("-w", "--workspace")
 
-    g = sub.add_parser("get", help="show one note")
+    g = add("get", help="show one note")
     g.add_argument("id", help="note id, title or alias")
     g.add_argument("-w", "--workspace")
 
-    pr = sub.add_parser("provenance", help="show where a note's content came from")
+    pr = add("provenance", help="show where a note's content came from")
     pr.add_argument("id", help="note id, title or alias")
     pr.add_argument("-w", "--workspace")
 
-    at = sub.add_parser("attention", help="list what needs a human decision")
+    at = add("attention", help="list what needs a human decision")
     at.add_argument("-w", "--workspace")
 
-    v = sub.add_parser("validate", help="check a workspace for problems")
+    v = add("validate", help="check a workspace for problems")
     v.add_argument("path", nargs="?")
     v.add_argument("--warnings-are-errors", action="store_true")
 
-    sub.add_parser("doctor", help="check the installation and workspace") \
+    add("doctor", help="check the installation and workspace") \
         .add_argument("path", nargs="?")
-    sub.add_parser("about", help="what EKSB stores and runs on this machine") \
+    add("about", help="what EKSB stores and runs on this machine") \
         .add_argument("path", nargs="?")
 
-    cf = sub.add_parser("config", help="show or change settings")
+    cf = add("config", help="show or change settings")
     cf.add_argument("--set-lang", metavar="LANG")
     cf.add_argument("--set-workspace", metavar="PATH")
     return p
@@ -1285,6 +1307,8 @@ def dispatch(args):
     if args.cmd is None:
         cfg = config.load()
         return menu() if cfg.get("onboarded") else onboarding()
+    if args.cmd == "help":
+        return cmd_help(args.topic)
     if args.cmd == "demo":
         return cmd_demo(args.path, args.reset)
     if args.cmd == "forget":

@@ -1249,6 +1249,8 @@ COMMAND_ONLY = {
     "validate",   # "Check my workspace" reports what it finds, in plain words
     "get",        # reachable from search results, which is where you want it
     "mcp",        # an AI client starts this; it is not a human workflow
+    "help",       # the menu is itself the guided path; a "Help" entry in it
+                  # would only list the menu the reader is already looking at
 }
 
 
@@ -1306,6 +1308,42 @@ def test_status_command_matches_the_menu_screen(isolated):
     assert "Where things stand" in out
     assert "Atlas" in out and "indexed" in out
     assert "Projects: 1" in out
+
+
+def test_help_is_a_command_not_an_error(isolated):
+    """`eksb help` is what people type. It used to be an invalid choice."""
+    code, out = run("help")
+    assert code == 0
+    assert "usage: eksb" in out
+    assert "ingest" in out and "attention" in out
+    assert "invalid choice" not in out
+
+    # and it lists itself, so it is discoverable from the list it prints
+    assert "list the commands" in out
+
+
+def test_help_explains_one_command(isolated):
+    for cmd, expected in (("ingest", "--dry-run"),
+                          ("search", "find notes"),
+                          ("workspace", "delete")):
+        code, out = run("help", cmd)
+        assert code == 0, (cmd, out)
+        assert f"usage: eksb {cmd}" in out and expected in out
+
+    # a subcommand of a subcommand comes for free
+    code, out = run("help", "workspace", "delete")
+    assert code == 0 and "--yes" in out
+
+
+def test_help_for_something_that_is_not_a_command_says_so(isolated):
+    code, out = run("help", "teleport")
+    assert code == 1
+    assert "no `eksb teleport` command" in out
+    assert "eksb help" in out                    # and how to find the real ones
+    assert "Traceback" not in out and "usage:" not in out
+
+    code, out = run("--lang", "pt-BR", "help", "teleport")
+    assert code == 1 and "Não existe o comando" in out
 
 
 def test_workspace_subcommands_mirror_the_menu(isolated):

@@ -65,6 +65,9 @@ jobs:
         run: |
           eksb --version
           eksb --help
+          eksb help
+          eksb help ingest
+          eksb help workspace delete
 
       - name: Demo, then read it
         run: |
