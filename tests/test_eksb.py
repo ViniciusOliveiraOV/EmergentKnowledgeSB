@@ -261,23 +261,23 @@ def run_tty(*argv, script=None):
         except StopIteration:
             print()
             raise EOFError
-        if want == "" or want.isdigit():
-            print(want)
-            return want
-        m = _re.search(rf"(\d+)\. {_re.escape(want)}", buf.getvalue())
-        assert m, f"no option {want!r} on screen:\n{buf.getvalue()[-1500:]}"
-        print(m.group(1))
-        return m.group(1)
+        m = None if want == "" or want.isdigit() else \
+            _re.search(rf"(\d+)\. {_re.escape(want)}", buf.getvalue())
+        answer = m.group(1) if m else want      # a label if it is one, else literal
+        print(answer)
+        return answer
 
-    import builtins
+    import builtins, types
     old_in, builtins.input = builtins.input, scripted
-    old, sys.stdout = sys.stdout, buf
+    old_out, sys.stdout = sys.stdout, buf
+    old_in_stream = sys.stdin
+    sys.stdin = types.SimpleNamespace(isatty=lambda: True)   # both ends a tty
     try:
         code = cli.main(list(argv))
     except SystemExit as e:
         code = e.code or 0
     finally:
-        sys.stdout = old
+        sys.stdout, sys.stdin = old_out, old_in_stream
         builtins.input = old_in
     return code, buf.getvalue()
 
@@ -1506,3 +1506,88 @@ def test_no_color_changes_colour_and_nothing_else(isolated, monkeypatch):
 
     assert "\033[" in coloured and "\033[" not in plain
     assert _re.sub(r"\033\[[0-9;]*m", "", coloured) == plain
+
+
+# -- opening a search result by number ------------------------------------
+def test_search_opens_a_result_by_number(isolated):
+    """The number on screen is the affordance; the id is for scripts."""
+    seeded(isolated)
+    code, out = run_tty("search", "partitioning", script=["2"])
+    assert code == 0
+    assert "Open result [1-7, Enter to leave]" in out
+
+    import re as _re
+    listing, opened = out.split("Open result", 1)
+    title = _re.search(r"^\s*2\. (.+?)  \(", listing, _re.M).group(1)
+    assert title in opened                       # the one that was numbered 2
+
+
+def test_a_single_result_is_still_number_one(isolated):
+    mine = seeded(isolated)
+    run("add", "Zarquon", "-w", str(mine))        # a word nothing else matches
+    code, out = run_tty("search", "Zarquon", script=["1"])
+    assert code == 0
+    assert "1 match(es)" in out
+    assert "Open result [1-1, Enter to leave]" in out
+    assert "Came from" in out                     # it opened
+
+
+def test_pressing_enter_leaves_without_opening_anything(isolated):
+    seeded(isolated)
+    code, out = run_tty("search", "partitioning", script=[""])
+    assert code == 0
+    assert "Open result" in out
+    assert "Came from" not in out                 # nothing was opened
+    assert "## Definition" not in out
+
+
+def test_a_number_that_is_not_there_is_asked_again(isolated):
+    seeded(isolated)
+    code, out = run_tty("search", "partitioning", script=["99", "banana", "1"])
+    assert code == 0
+    assert out.count("Choose a number between 1 and 7") == 2
+    assert "Came from" in out                     # and the third answer worked
+    assert "Traceback" not in out
+
+
+def test_the_number_belongs_to_that_search_and_nothing_else(isolated):
+    """Ephemeral by construction: no state is written, and `get 1` is not a thing."""
+    mine = seeded(isolated)
+    before = sorted(p.name for p in config.config_dir().rglob("*"))
+    run_tty("search", "partitioning", script=["2"])
+    assert sorted(p.name for p in config.config_dir().rglob("*")) == before
+    assert "search" not in str(config.load())
+
+    code, out = run("get", "1")
+    assert code == 1 and "I couldn't find" in out
+
+    # and a different search numbers its own results from 1
+    run("add", "Zarquon", "-w", str(mine))
+    code, out = run_tty("search", "Zarquon", script=["1"])
+    assert code == 0 and "1 match(es)" in out     # numbered 1 in its own right
+    assert "Zarquon" in out.split("Open result")[1]
+
+
+def test_piped_search_lists_and_never_prompts(isolated):
+    seeded(isolated)
+    code, out = run("search", "partitioning")     # a plain StringIO: a pipe
+    assert code == 0
+    assert "7 match(es)" in out
+    assert "Open result" not in out
+    assert "c-20260826-horizontal-partitioning" in out   # ids stay, for scripts
+
+
+def test_an_opened_result_uses_the_note_and_provenance_rendering(isolated):
+    seeded(isolated)
+    code, out = run_tty("search", "Horizontal Partitioning", script=["1"])
+    assert code == 0
+    assert "## Definition" in out                 # show_note: the body itself
+    assert "Came from" in out                     # show_provenance: the source
+    assert "Points at:" in out                    # and its relations, as ever
+
+
+def test_the_prompt_speaks_portuguese_too(isolated):
+    seeded(isolated)
+    code, out = run_tty("--lang", "pt-BR", "search", "partitioning", script=[""])
+    assert code == 0
+    assert "Abrir resultado [1-7, Enter para sair]" in out

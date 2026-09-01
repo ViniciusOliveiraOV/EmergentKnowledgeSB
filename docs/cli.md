@@ -34,7 +34,7 @@ entirely.
 | Delete one from disk | Manage workspaces | `eksb workspace delete PATH --yes` |
 | Where things stand | menu | `eksb status` |
 | Search | menu | `eksb search QUERY` |
-| Read a note | a search result | `eksb get ID` |
+| Read a note | a numbered search result | `eksb get ID` |
 | Where it came from | menu | `eksb provenance ID` |
 | What needs attention | menu | `eksb attention` |
 | Add a note | Add something | `eksb add TITLE` |
@@ -159,6 +159,17 @@ eksb search QUERY... [-w PATH]
 
 Case-insensitive substring search over titles, aliases, ids, tags and bodies.
 Title and alias matches rank above body matches.
+
+On a terminal, the results are numbered and you open one by typing its
+number; Enter leaves without opening anything. The number belongs to that
+listing and nothing else — nothing is stored, and `eksb get 1` does not mean
+"the first result of my last search". Piped or redirected, `eksb search`
+prints the list and never asks a question, so `eksb search foo | grep bar`
+works as it should.
+
+The stable id under each result stays there, dimmed: it is what scripts,
+`eksb get` and MCP use. It is not what a person browsing should have to
+copy.
 
 ```
 eksb get ID|TITLE|ALIAS [-w PATH]

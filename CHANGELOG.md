@@ -101,6 +101,12 @@ work history -> EKSB -> selective retrieval -> AI agent -> work
   stdin.
 - Picking a search result in the menu now shows the note itself as well as
   its provenance — `eksb get`'s guided equivalent.
+- **Search results open by number.** `eksb search` on a terminal ends with
+  `Open result [1-7, Enter to leave]`, and typing the number shows that note
+  and its provenance. The number is that listing's alone: nothing is stored,
+  and `eksb get 1` still means the note called `1`. Piped, the command lists
+  and never prompts. Stable ids remain under each result, dimmed, for
+  scripts, `eksb get` and MCP.
 - **The ASCII identity is back on every interactive start**, not only on the
   first run. `eksb` opens with the logo, the product name and the version,
   then the compact `EKSB // Workbench` line and the workspace in use. It is

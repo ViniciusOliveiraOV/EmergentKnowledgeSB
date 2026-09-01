@@ -259,7 +259,9 @@ def show_note_line(n, i=None):
     out(f"{num}{bold(n.title)}  {dim('(' + n.type + ')')}")
 
 
-def cmd_search(w, query, interactive=False):
+def cmd_search(w, query, interactive=None):
+    """`interactive=None` means: decide from the terminal. A person browsing
+    gets to type a number; a pipe gets the list and no question."""
     hits = w.search(query)
     if not hits:
         out(t("search.none", q=query))
@@ -270,14 +272,23 @@ def cmd_search(w, query, interactive=False):
         if snippet and snippet.lower() != n.title.lower():
             out(f"        {dim(snippet[:100])}")
         out(f"        {dim(n.id)}")
-    if interactive:
-        out()
-        s = ask(t("search.pick"))
+    if interactive is None:
+        interactive = sys.stdin.isatty() and sys.stdout.isatty()
+    if not interactive:
+        return 0
+
+    # the number is this listing's, and nothing keeps it afterwards
+    out()
+    while True:
+        s = ask(t("search.pick", n=len(hits)))
+        if not s:
+            return 0
         if s.isdigit() and 1 <= int(s) <= len(hits):
             note = hits[int(s) - 1][0]
             show_note(note)              # the note itself...
             show_provenance(w, note)     # ...and where it came from
-    return 0
+            return 0
+        out(red(t("search.pick.invalid", n=len(hits))))
 
 
 def show_note(n):

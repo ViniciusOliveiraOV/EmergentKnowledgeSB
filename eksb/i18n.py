@@ -199,7 +199,8 @@ STRINGS: dict[str, dict[str, str]] = {
     "search.prompt": "Search for",
     "search.none": "Nothing matched \"{q}\".",
     "search.count": "{n} match(es) for \"{q}\":",
-    "search.pick": "Enter a number to open one, or press Enter to go back",
+    "search.pick": "Open result [1-{n}, Enter to leave]",
+    "search.pick.invalid": "Choose a number between 1 and {n}, or press Enter.",
 
     # -- adding -------------------------------------------------------
     "add.what": "What do you want to add?",
@@ -516,7 +517,8 @@ STRINGS: dict[str, dict[str, str]] = {
     "search.prompt": "Buscar por",
     "search.none": "Nada corresponde a \"{q}\".",
     "search.count": "{n} resultado(s) para \"{q}\":",
-    "search.pick": "Digite um número para abrir, ou Enter para voltar",
+    "search.pick": "Abrir resultado [1-{n}, Enter para sair]",
+    "search.pick.invalid": "Escolha um número entre 1 e {n}, ou tecle Enter.",
 
     "add.what": "O que você quer adicionar?",
     "add.note": "Algo que eu quero lembrar, com minhas palavras",
