@@ -94,7 +94,17 @@ jobs:
         run: |
           eksb config --set-lang pt-BR
           eksb attention | tee att.txt
-          grep -q "Coisas que precisam da sua atenção" att.txt
+          eksb attention > att-redirected.txt
+          # the shell's idea of an encoding is not the assertion: decode as
+          # UTF-8 in Python, which is what every consumer of this file will do
+          python - <<'PY'
+          import pathlib
+          for name in ("att.txt", "att-redirected.txt"):
+              text = pathlib.Path(name).read_text(encoding="utf-8")
+              assert "Coisas que precisam da sua atenção" in text, (name, text)
+              assert "não confirmado por você" in text, (name, text)
+              assert "\ufffd" not in text, name
+          PY
           eksb --lang en attention | grep -q "Things that need your attention"
           eksb config | grep -q "Portugu"
           eksb config --set-lang en
@@ -167,11 +177,12 @@ jobs:
           grep -q "Indexed Atlas" ing1.txt
           eksb ingest proj -w "$W" | tee ing2.txt
           grep -q "already up to date" ing2.txt
-          test "$(ls "$W/_sources" | wc -l)" = "3"   # 2 indexed + the earlier chat
+          python -c "import sys,pathlib; n=len(list(pathlib.Path(sys.argv[1],'_sources').glob('*.md'))); assert n==3, n" "$W"
 
           printf '# Atlas\n\nNow with retention windows.\n' > proj/README.md
           eksb ingest proj -w "$W" | grep -q "changed since last time"
-          test "$(ls "$W/_sources" | wc -l)" = "4"   # the old version was kept
+          # the old version was kept alongside the new one
+          python -c "import sys,pathlib; n=len(list(pathlib.Path(sys.argv[1],'_sources').glob('*.md'))); assert n==4, n" "$W"
           eksb validate "$W"
           eksb projects -w "$W" | grep -q "indexed"
 
@@ -185,7 +196,7 @@ jobs:
             printf '%s\n' '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"eksb_search","arguments":{"query":"latency"}}}'
           } | eksb mcp -w "$W" > mcp.txt
           cat mcp.txt
-          test "$(wc -l < mcp.txt)" = "3"
+          python -c "import pathlib; n=len(pathlib.Path('mcp.txt').read_text(encoding='utf-8').splitlines()); assert n==3, n"
           grep -q '"name": "eksb_submit_candidate"' mcp.txt
           grep -q 'eksb_provenance' mcp.txt
 
