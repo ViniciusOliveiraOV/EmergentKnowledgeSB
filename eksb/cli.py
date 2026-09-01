@@ -266,28 +266,30 @@ def cmd_search(w, query, interactive=None):
     if not hits:
         out(t("search.none", q=query))
         return 1
-    rule(t("search.count", n=len(hits), q=query))
-    for i, (n, snippet) in enumerate(hits, 1):
-        show_note_line(n, i)
-        if snippet and snippet.lower() != n.title.lower():
-            out(f"        {dim(snippet[:100])}")
-        out(f"        {dim(n.id)}")
     if interactive is None:
         interactive = sys.stdin.isatty() and sys.stdout.isatty()
-    if not interactive:
-        return 0
-
-    # the number is this listing's, and nothing keeps it afterwards
-    out()
     while True:
+        rule(t("search.count", n=len(hits), q=query))
+        for i, (n, snippet) in enumerate(hits, 1):
+            show_note_line(n, i)
+            if snippet and snippet.lower() != n.title.lower():
+                out(f"        {dim(snippet[:100])}")
+            out(f"        {dim(n.id)}")
+        if not interactive:
+            return 0
+
+        out()
+        out(f"  {cyan('0.')} {t('menu.back')}")
+        out()
         s = ask(t("search.pick", n=len(hits)))
-        if not s:
+        if not s or s == "0":
             return 0
         if s.isdigit() and 1 <= int(s) <= len(hits):
             note = hits[int(s) - 1][0]
             show_note(note)              # the note itself...
             show_provenance(w, note)     # ...and where it came from
-            return 0
+            out()
+            continue
         out(red(t("search.pick.invalid", n=len(hits))))
 
 
@@ -345,79 +347,94 @@ def show_provenance(w, n):
 def show_attention(w, interactive=None):
     if interactive is None:
         interactive = sys.stdin.isatty() and sys.stdout.isatty()
-    a = w.attention()
-    rule(t("att.title"))
-    shown = False
-    actions = []
+    while True:
+        a = w.attention()
+        rule(t("att.title"))
+        shown = False
+        actions = []
 
-    def block(key, items, fmt):
-        nonlocal shown
-        if not items:
-            return
-        shown = True
+        def block(key, items, fmt):
+            nonlocal shown
+            if not items:
+                return
+            shown = True
+            out()
+            out(bold(t(key) + f"  ({len(items)})"))
+            for item in items[:15]:
+                out("  " + fmt(item))
+            if len(items) > 15:
+                out(dim(f"  ... +{len(items) - 15}"))
+
+        block("att.errors", a["errors"], lambda e: red(e))
+        block("att.queue", a["queue"], lambda q: q)
+        block("att.open", a["open_questions"], lambda p: p[0].title)
+        block("att.unendorsed", a["unendorsed"],
+              lambda p: f"{p[1][:80]}  {dim('- ' + p[0].title)}")
+        block("att.unverified", a["unverified"],
+              lambda p: f"{p[1][:80]}  {dim('- ' + p[0].title)}")
+
+        for note, _ in a["open_questions"]:
+            actions.append(("question", note, "open_question", note.title))
+        for note, text in a["unendorsed"]:
+            tag = next((tag for tag, claim in note.claims()
+                        if claim == text and tag in ws.SUGGESTED_EPISTEMIC), "")
+            actions.append(("suggestion", note, tag, text))
+        for note, text in a["unverified"]:
+            tag = next((tag for tag, claim in note.claims()
+                        if claim == text and tag in ws.OUTSIDE_EPISTEMIC), "")
+            actions.append(("outside", note, tag, text))
+
+        if interactive and actions:
+            shown = True
+            out()
+            out(bold(t("att.decisions") + f"  ({len(actions)})"))
+            for i, (kind, note, _tag, text) in enumerate(actions[:15], 1):
+                label = t(f"att.kind.{kind}")
+                out(f"  {i}. {label}: {text[:72]}  {dim('- ' + note.title)}")
+            if len(actions) > 15:
+                out(dim(f"  ... +{len(actions) - 15}"))
+
+        block("att.superseded", a["superseded"],
+              lambda p: f"{p[0].title} {dim('-> ' + str(p[1]).strip('[]'))}")
+        block("att.review", a["review_due"],
+              lambda p: f"{p[0].title} {dim(p[1])}")
+        block("att.warnings", a["warnings"], lambda x: dim(x))
+
+        if not shown:
+            out()
+            out(green(t("att.clean")))
+        if not interactive:
+            return 0
+
         out()
-        out(bold(t(key) + f"  ({len(items)})"))
-        for item in items[:15]:
-            out("  " + fmt(item))
-        if len(items) > 15:
-            out(dim(f"  ... +{len(items) - 15}"))
-
-    block("att.errors", a["errors"], lambda e: red(e))
-    block("att.queue", a["queue"], lambda q: q)
-    block("att.open", a["open_questions"], lambda p: p[0].title)
-    block("att.unendorsed", a["unendorsed"],
-          lambda p: f"{p[1][:80]}  {dim('- ' + p[0].title)}")
-    block("att.unverified", a["unverified"],
-          lambda p: f"{p[1][:80]}  {dim('- ' + p[0].title)}")
-
-    for note, _ in a["open_questions"]:
-        actions.append(("question", note, "open_question", note.title))
-    for note, text in a["unendorsed"]:
-        tag = next((tag for tag, claim in note.claims()
-                    if claim == text and tag in ws.SUGGESTED_EPISTEMIC), "")
-        actions.append(("suggestion", note, tag, text))
-    for note, text in a["unverified"]:
-        tag = next((tag for tag, claim in note.claims()
-                    if claim == text and tag in ws.OUTSIDE_EPISTEMIC), "")
-        actions.append(("outside", note, tag, text))
-
-    if interactive and actions:
-        shown = True
+        out(f"  {cyan('0.')} {t('menu.back')}")
         out()
-        out(bold(t("att.decisions") + f"  ({len(actions)})"))
-        for i, (kind, note, _tag, text) in enumerate(actions[:15], 1):
-            label = t(f"att.kind.{kind}")
-            out(f"  {i}. {label}: {text[:72]}  {dim('- ' + note.title)}")
-        if len(actions) > 15:
-            out(dim(f"  ... +{len(actions) - 15}"))
+        raw = ask(t("menu.choose")).strip()
+        if not raw or raw == "0":
+            return 0
+        try:
+            index = int(raw) - 1
+            if index < 0 or index >= min(len(actions), 15):
+                raise ValueError
+        except ValueError:
+            out(yellow(t("att.pick.invalid")))
+            continue
 
-    block("att.superseded", a["superseded"],
-          lambda p: f"{p[0].title} {dim('-> ' + str(p[1]).strip('[]'))}")
-    block("att.review", a["review_due"], lambda p: f"{p[0].title} {dim(p[1])}")
-    block("att.warnings", a["warnings"], lambda x: dim(x))
-
-    if not shown:
-        out()
-        out(green(t("att.clean")))
-
-    if interactive and actions:
-        out()
-        raw = ask(t("att.pick.prompt", n=min(len(actions), 15))).strip()
-        if raw:
-            try:
-                index = int(raw) - 1
-                if index < 0 or index >= min(len(actions), 15):
-                    raise ValueError
-            except ValueError:
-                out(yellow(t("att.pick.invalid")))
-                return 0
-
+        kind, note, tag, text = actions[index]
+        while True:
+            out(f"  {cyan('0.')} {t('menu.back')}")
             action = ask(t("att.action.prompt")).strip().lower()
-            kind, note, tag, text = actions[index]
-            if action in ("", "3"):
+            if action in ("", "0"):
+                break
+            if action == "3":
                 out(dim(t("att.action.pending")))
-            elif action in ("1",):
-                try:
+                break
+            if action not in ("1", "2"):
+                out(yellow(t("att.action.invalid")))
+                continue
+
+            try:
+                if action == "1":
                     if kind == "outside":
                         ws.verify_claim(w, note, tag, text)
                         out(green(t("att.verify.done")))
@@ -427,31 +444,20 @@ def show_attention(w, interactive=None):
                     else:
                         ws.resolve_question(w, note, accepted=True)
                         out(green(t("att.resolve.done")))
-                except ws.WorkspaceError as e:
-                    reason, _, detail = str(e).partition(":")
-                    if reason == "demo-readonly":
-                        out(red(t("demo.readonly")))
-                        out(dim(t("demo.readonly.hint", path=Path.home() / "MyEKSB")))
-                    else:
-                        out(red(t("att.action.failed", detail=detail or reason)))
-            elif action in ("2",):
-                try:
+                else:
                     if kind == "question":
                         ws.resolve_question(w, note, accepted=False)
                     else:
                         ws.reject_claim(w, note, tag, text)
                     out(green(t("att.reject.done")))
-                except ws.WorkspaceError as e:
-                    reason, _, detail = str(e).partition(":")
-                    if reason == "demo-readonly":
-                        out(red(t("demo.readonly")))
-                        out(dim(t("demo.readonly.hint", path=Path.home() / "MyEKSB")))
-                    else:
-                        out(red(t("att.action.failed", detail=detail or reason)))
-            else:
-                out(yellow(t("att.action.invalid")))
-
-    return 0
+            except ws.WorkspaceError as e:
+                reason, _, detail = str(e).partition(":")
+                if reason == "demo-readonly":
+                    out(red(t("demo.readonly")))
+                    out(dim(t("demo.readonly.hint", path=Path.home() / "MyEKSB")))
+                else:
+                    out(red(t("att.action.failed", detail=detail or reason)))
+            break
 
 
 def cmd_add(w, type_, title):
@@ -478,28 +484,32 @@ def cmd_save(w, src, title=None, kind="personal_note"):
 
 
 def add_menu(w):
-    pick = choose(t("add.what"), [
-        ("note", t("add.note")),
-        ("source", t("add.source")),
-    ], allow_back=True)
-    if pick is None:
-        return
-    if pick == "source":
-        src = ask(t("save.path"))
-        if not src:
+    while True:
+        pick = choose(t("add.what"), [
+            ("note", t("add.note")),
+            ("source", t("add.source")),
+        ], allow_back=True)
+        if pick is None:
             return
-        kind = choose(t("save.kind"), [(k, t("save.kind." + k))
-                                       for k in ("chatgpt", "claude", "web",
-                                                 "paper", "personal_note")])
-        cmd_save(w, src, None, kind)
-    elif pick == "note":
-        type_ = choose(t("add.type"), [(x, t("type." + x)) for x in ws.ADDABLE],
-                       allow_back=True)
-        if type_ is None:
-            return
-        title = ask(t("add.title"))
-        if title:
-            cmd_add(w, type_, title)
+        if pick == "source":
+            src = ask(t("save.path"))
+            if not src:
+                continue
+            kind = choose(t("save.kind"), [(k, t("save.kind." + k))
+                                           for k in ("chatgpt", "claude", "web",
+                                                     "paper", "personal_note")],
+                          allow_back=True)
+            if kind is not None:
+                cmd_save(w, src, None, kind)
+        elif pick == "note":
+            type_ = choose(t("add.type"),
+                           [(x, t("type." + x)) for x in ws.ADDABLE],
+                           allow_back=True)
+            if type_ is None:
+                continue
+            title = ask(t("add.title"))
+            if title:
+                cmd_add(w, type_, title)
 
 
 # -- projects and ingestion ----------------------------------------------
@@ -938,7 +948,7 @@ def cmd_validate(path=None, strict=False):
 
 
 # -- interactive ---------------------------------------------------------
-def pick_language(force=False) -> str:
+def pick_language(force=False) -> str | None:
     cfg = config.load()
     if cfg.get("lang") and not force:
         return set_lang(cfg["lang"])
@@ -946,9 +956,13 @@ def pick_language(force=False) -> str:
     rule(t("lang.choose"))
     for i, code in enumerate(codes, 1):
         out(f"  {cyan(str(i) + '.')} {LANGUAGES[code]}")
+    if force:
+        out(f"  {cyan('0.')} {t('menu.back')}")
     out()
     while True:
-        s = ask(t("menu.choose"), "1")
+        s = ask(t("menu.choose"), "" if force else "1")
+        if force and (not s or s == "0"):
+            return None
         if s.isdigit() and 1 <= int(s) <= len(codes):
             code = codes[int(s) - 1]
             config.set_(lang=code)
@@ -1038,7 +1052,6 @@ def learn_menu():
         else:
             out(t("learn.docs.body"))
         out()
-        pause()
 
 
 def cmd_forget():
@@ -1146,8 +1159,6 @@ def workspace_menu():
             out(red(str(e)))
             if e.hint:
                 out(dim(e.hint))
-        out()
-        pause()
 
 
 def settings_menu():
@@ -1166,25 +1177,26 @@ def settings_menu():
 
 
 def project_menu(w):
-    pick = choose(t("proj.what"), [
-        ("list", t("proj.list")),
-        ("add", t("proj.add")),
-    ], allow_back=True)
-    if pick is None:
-        return
-    if pick == "list":
-        cmd_projects(w)
-        return
-    path = ask(t("ing.path"))
-    if not path:
-        return
-    name = ask(t("ing.name"), Path(path).expanduser().name)
-    try:
-        cmd_ingest(w, path, name)
-    except UserError as e:
-        out(red(str(e)))
-        if e.hint:
-            out(dim(e.hint))
+    while True:
+        pick = choose(t("proj.what"), [
+            ("list", t("proj.list")),
+            ("add", t("proj.add")),
+        ], allow_back=True)
+        if pick is None:
+            return
+        if pick == "list":
+            cmd_projects(w)
+            continue
+        path = ask(t("ing.path"))
+        if not path:
+            continue
+        name = ask(t("ing.name"), Path(path).expanduser().name)
+        try:
+            cmd_ingest(w, path, name)
+        except UserError as e:
+            out(red(str(e)))
+            if e.hint:
+                out(dim(e.hint))
 
 
 def menu():
@@ -1240,8 +1252,10 @@ def menu():
             out(red(str(e)))
             if e.hint:
                 out(dim(e.hint))
-        out()
-        pause()
+        if pick not in {"search", "project", "add", "attention",
+                        "settings", "learn"}:
+            out()
+            pause()
 
 
 def dispatch_menu(pick, w):

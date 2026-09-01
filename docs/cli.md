@@ -24,6 +24,11 @@ version of the other. Someone who only ever types `eksb` can do everything
 that constitutes normal use. Someone scripting over SSH can ignore the menu
 entirely.
 
+Interactive submenus stay open after an action and refresh their contents.
+Choose `0. Back` to return to the parent menu; returning never requires a
+second, otherwise redundant Enter. This applies to search results, attention,
+adding items, projects, settings, workspace management and learning screens.
+
 | Capability | Guided | Command |
 |---|---|---|
 | Try the demo | first run, menu | `eksb demo` |
@@ -161,11 +166,11 @@ Case-insensitive substring search over titles, aliases, ids, tags and bodies.
 Title and alias matches rank above body matches.
 
 On a terminal, the results are numbered and you open one by typing its
-number; Enter leaves without opening anything. The number belongs to that
-listing and nothing else — nothing is stored, and `eksb get 1` does not mean
-"the first result of my last search". Piped or redirected, `eksb search`
-prints the list and never asks a question, so `eksb search foo | grep bar`
-works as it should.
+number. After reading it, the result list is shown again; choose `0. Back` to
+leave (Enter remains a shortcut). The number belongs to that listing and
+nothing else — nothing is stored, and `eksb get 1` does not mean "the first
+result of my last search". Piped or redirected, `eksb search` prints the list
+and never asks a question, so `eksb search foo | grep bar` works as it should.
 
 The stable id under each result stays there, dimmed: it is what scripts,
 `eksb get` and MCP use. It is not what a person browsing should have to
@@ -209,7 +214,9 @@ decision list. Each item can be confirmed, rejected or left pending from that
 same screen. EKSB records the correct internal result for the item type:
 outside claims are marked verified, assistant suggestions get an explicit
 human endorsement or rejection marker, and open questions get a resolution
-marker. The original note text is preserved.
+marker. The list refreshes after every decision so more items can be handled
+without reopening the screen; `0. Back` returns to the parent menu. The
+original note text is preserved.
 
 ## Writing
 

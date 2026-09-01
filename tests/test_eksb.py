@@ -171,6 +171,15 @@ def test_language_switch_and_persistence(isolated):
     assert config.load()["lang"] == "pt-BR"        # a one-run override only
 
 
+def test_language_selector_in_settings_can_go_back(isolated, monkeypatch, capsys):
+    config.set_(lang="en")
+    feed(monkeypatch, ["0"])
+
+    assert cli.pick_language(force=True) is None
+    assert config.load()["lang"] == "en"
+    assert "0. Back" in capsys.readouterr().out
+
+
 def test_both_languages_define_the_same_keys():
     en = set(i18n.STRINGS["en"])
     for lang, table in i18n.STRINGS.items():
@@ -1455,12 +1464,60 @@ def test_the_logo_appears_once_per_session(isolated):
     seeded(isolated)
     config.set_(onboarded=True, lang="en")
 
-    code, out = run_tty(script=["Learn more", "0", "", "Exit"])
+    code, out = run_tty(script=["Learn more", "0", "Exit"])
     assert code == 0
     assert "How your data is stored" in out          # we really went in...
     assert out.count("What would you like to do?") == 2   # ...and came back
     assert out.count("|______|") == 1, out                # to no second logo
     assert out.count("EKSB // Workbench") == 1
+    assert "Bye." in out
+    assert "Press Enter to continue" not in out
+
+
+def test_attention_stays_open_until_the_user_goes_back(isolated):
+    seeded(isolated)
+    config.set_(onboarded=True, lang="en")
+
+    code, out = run_tty(script=["What needs my attention?", "1", "3",
+                                "0", "Exit"])
+
+    assert code == 0 and "Bye." in out
+    assert out.count("Things that need your attention") == 2
+    assert "Press Enter to continue" not in out
+
+
+def test_search_results_reload_after_opening_a_note(isolated):
+    mine = seeded(isolated)
+
+    code, out = run_tty("search", "partitioning", "-w", str(mine),
+                        script=["1", "0"])
+
+    assert code == 0
+    assert out.count('match(es) for "partitioning":') == 2
+    assert out.count("0. Back") == 2
+
+
+def test_action_submenus_reload_and_keep_an_explicit_exit(isolated):
+    mine = seeded(isolated)
+    config.set_(onboarded=True, lang="en", workspace=str(mine))
+
+    code, out = run_tty(script=[
+        "Add something",
+        "Something I want to remember, in my own words",
+        "An idea I will refer back to",
+        "Navigation Loop",
+        "0",
+        "Projects",
+        "List my projects",
+        "0",
+        "Exit",
+    ])
+
+    assert code == 0 and "Bye." in out
+    assert out.count("What do you want to add?") == 2
+    assert out.splitlines().count("Projects") >= 3
+    assert ws.Workspace(mine).get("Navigation Loop") is not None
+    assert "Press Enter to continue" not in out
 
 
 def test_subcommands_never_print_the_logo(isolated):
@@ -1512,9 +1569,9 @@ def test_no_color_changes_colour_and_nothing_else(isolated, monkeypatch):
 def test_search_opens_a_result_by_number(isolated):
     """The number on screen is the affordance; the id is for scripts."""
     seeded(isolated)
-    code, out = run_tty("search", "partitioning", script=["2"])
+    code, out = run_tty("search", "partitioning", script=["2", "0"])
     assert code == 0
-    assert "Open result [1-7, Enter to leave]" in out
+    assert "Open result [1-7] or choose 0 to go back" in out
 
     import re as _re
     listing, opened = out.split("Open result", 1)
@@ -1525,10 +1582,10 @@ def test_search_opens_a_result_by_number(isolated):
 def test_a_single_result_is_still_number_one(isolated):
     mine = seeded(isolated)
     run("add", "Zarquon", "-w", str(mine))        # a word nothing else matches
-    code, out = run_tty("search", "Zarquon", script=["1"])
+    code, out = run_tty("search", "Zarquon", script=["1", "0"])
     assert code == 0
     assert "1 match(es)" in out
-    assert "Open result [1-1, Enter to leave]" in out
+    assert "Open result [1-1] or choose 0 to go back" in out
     assert "Came from" in out                     # it opened
 
 
@@ -1579,7 +1636,7 @@ def test_piped_search_lists_and_never_prompts(isolated):
 
 def test_an_opened_result_uses_the_note_and_provenance_rendering(isolated):
     seeded(isolated)
-    code, out = run_tty("search", "Horizontal Partitioning", script=["1"])
+    code, out = run_tty("search", "Horizontal Partitioning", script=["1", "0"])
     assert code == 0
     assert "## Definition" in out                 # show_note: the body itself
     assert "Came from" in out                     # show_provenance: the source
@@ -1590,7 +1647,8 @@ def test_the_prompt_speaks_portuguese_too(isolated):
     seeded(isolated)
     code, out = run_tty("--lang", "pt-BR", "search", "partitioning", script=[""])
     assert code == 0
-    assert "Abrir resultado [1-7, Enter para sair]" in out
+    assert "Abrir resultado [1-7] ou escolha 0 para voltar" in out
+    assert "0. Voltar" in out
 
 
 # -- encoding, on every platform ------------------------------------------
@@ -1759,7 +1817,8 @@ def test_human_verify_claim_is_append_only_and_preserves_epistemic(isolated):
     )
 
 
-def test_interactive_attention_lets_the_human_verify_an_outside_claim(isolated, monkeypatch):
+def test_interactive_attention_lets_the_human_verify_an_outside_claim(
+        isolated, monkeypatch, capsys):
     """Workbench attention is where the human can settle an outside claim."""
     mine = seeded(isolated)
     claim = "Retention is 90 days on the events table."
@@ -1783,10 +1842,13 @@ def test_interactive_attention_lets_the_human_verify_an_outside_claim(isolated, 
     choice = next(str(i) for i, (note, text) in enumerate(actions, 1)
                   if note.title == "Retention Window Policy" and text == claim)
 
-    answers = iter([choice, "1"])
+    answers = iter([choice, "1", "0"])
     monkeypatch.setattr(cli, "ask", lambda prompt="": next(answers))
 
     cli.show_attention(current, interactive=True)
+    output = capsys.readouterr().out
+    assert output.count("Things that need your attention") == 2
+    assert "0. Back" in output
 
     fresh = ws.Workspace(mine)
     assert not any(
@@ -1822,7 +1884,7 @@ def test_interactive_attention_lets_the_human_confirm_an_assistant_suggestion(is
     choice = next(str(i) for i, (note, text) in enumerate(actions, 1)
                   if note.title == "Retention Window Policy" and text == claim)
 
-    answers = iter([choice, "1"])
+    answers = iter([choice, "1", "0"])
     monkeypatch.setattr(cli, "ask", lambda prompt="": next(answers))
 
     cli.show_attention(current, interactive=True)
@@ -1864,7 +1926,7 @@ def test_interactive_attention_lets_the_human_reject_a_suggestion(isolated, monk
     choice = next(str(i) for i, (note, text) in enumerate(actions, 1)
                   if note.title == "Retention Window Policy" and text == claim)
 
-    answers = iter([choice, "2"])
+    answers = iter([choice, "2", "0"])
     monkeypatch.setattr(cli, "ask", lambda prompt="": next(answers))
 
     cli.show_attention(current, interactive=True)
@@ -1894,7 +1956,7 @@ def test_interactive_attention_lets_the_human_resolve_an_open_question(isolated,
     choice = next(str(i) for i, (n, _text) in enumerate(attention["open_questions"], 1)
                   if n is note)
 
-    answers = iter([choice, "1"])
+    answers = iter([choice, "1", "0"])
     monkeypatch.setattr(cli, "ask", lambda prompt="": next(answers))
 
     cli.show_attention(current, interactive=True)
