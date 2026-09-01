@@ -3,6 +3,7 @@
 Everything runs against a temporary HOME and a temporary config dir, so a
 developer's own workspace and settings are never touched or read.
 """
+import os
 import io
 import sys
 from pathlib import Path
@@ -1121,6 +1122,70 @@ def test_delete_refuses_the_home_directory(isolated, monkeypatch):
     with pytest.raises(cli.UserError):
         cli.cmd_delete(w)
     assert home.is_dir()
+
+
+def test_delete_refuses_a_filesystem_root(isolated):
+    root = Path(isolated.anchor)
+    with pytest.raises(cli.UserError):
+        cli.cmd_delete(ws.Workspace(root), assume_yes=True)
+    assert root.is_dir()
+    # and through the subcommand, which never even reaches a Workspace
+    code, out = run("workspace", "delete", str(root), "--yes")
+    assert code == 1 and root.is_dir()
+
+
+def test_delete_refuses_an_ordinary_directory(isolated):
+    plain = isolated / "holiday-photos"
+    plain.mkdir()
+    (plain / "beach.jpg").write_bytes(b"not a workspace")
+
+    code, out = run("workspace", "delete", str(plain), "--yes")
+    assert code == 1
+    assert plain.is_dir() and (plain / "beach.jpg").exists()
+
+    # nor by handing the guard a Workspace object pointed at it directly
+    with pytest.raises(cli.UserError):
+        cli.cmd_delete(ws.Workspace(plain), assume_yes=True)
+    assert (plain / "beach.jpg").exists()
+
+
+def test_delete_refuses_a_directory_containing_home(isolated, monkeypatch):
+    """A workspace one level above HOME would take the whole home with it."""
+    above = Path.home().parent
+    (above / ws.MARKER).parent.mkdir(parents=True, exist_ok=True)
+    (above / ws.MARKER).write_text("name: too big\n", encoding="utf-8")
+    with pytest.raises(cli.UserError):
+        cli.cmd_delete(ws.Workspace(above), assume_yes=True)
+    assert Path.home().is_dir()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
+def test_delete_follows_symlinks_before_deciding(isolated):
+    """A link is not a loophole: the target is what gets judged."""
+    run("demo", str(isolated / "demo"))
+    link = isolated / "innocent-name"
+    link.symlink_to(isolated / "demo")
+    code, out = run("workspace", "delete", str(link), "--yes")
+    assert code == 1 and "cannot be deleted here" in out
+    assert (isolated / "demo" / "_system" / "workspace.yml").is_file()
+
+    to_home = isolated / "shortcut"
+    to_home.symlink_to(Path.home())
+    with pytest.raises(cli.UserError):
+        cli.cmd_delete(ws.Workspace(to_home), assume_yes=True)
+    assert Path.home().is_dir()
+
+
+def test_yes_skips_the_question_and_nothing_else(isolated):
+    """--yes is consent to not be asked. It is not consent to break a guard."""
+    mine = seeded(isolated)
+    assert run("workspace", "delete", str(mine), "--yes")[0] == 0
+    assert not mine.exists()
+
+    for protected in (Path(isolated.anchor), Path.home()):
+        with pytest.raises(cli.UserError):
+            cli.cmd_delete(ws.Workspace(protected), assume_yes=True)
+        assert protected.is_dir()
 
 
 def test_manage_workspaces_offers_reset_for_the_demo_and_delete_otherwise(

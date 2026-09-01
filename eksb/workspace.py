@@ -90,6 +90,24 @@ def refuse_if_demo(w: "Workspace") -> None:
         raise WorkspaceError(f"demo-readonly:{w.root}")
 
 
+def refuse_if_undeletable(w: "Workspace") -> None:
+    """The guards for the one command that destroys data. They live here, not
+    in the CLI, so the menu, the subcommand and any future caller share them.
+
+    `Workspace.root` is already resolved, so a symlink pointing at a protected
+    location has become that location by the time we look.
+    """
+    if w.is_demo:
+        raise WorkspaceError(f"delete-demo:{w.root}")
+    target = w.root
+    home = Path.home().resolve()
+    if (target.parent == target                  # a filesystem root
+            or home == target or home.is_relative_to(target)):
+        raise WorkspaceError(f"delete-protected:{target}")
+    if not is_workspace(target):                 # never an ordinary directory
+        raise WorkspaceError(f"delete-notworkspace:{target}")
+
+
 def find(start: Path | None = None) -> Path | None:
     """Nearest workspace at or above `start`. None if there is none."""
     p = (start or Path.cwd()).resolve()

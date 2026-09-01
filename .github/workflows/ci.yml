@@ -128,6 +128,14 @@ jobs:
           eksb validate "$W" > raw.txt 2>&1 && { echo "expected a mismatch"; exit 1; }
           cat raw.txt
           grep -q "content_hash mismatch" raw.txt
+          # put it back, so the steps after this one inherit a clean workspace
+          python - "$W" <<'PY'
+          import pathlib, sys
+          p = next((pathlib.Path(sys.argv[1]) / "_sources").glob("chat*.md"))
+          p.write_text(p.read_text(encoding="utf-8").replace("yes", "maybe"),
+                       encoding="utf-8")
+          PY
+          eksb validate "$W"
 
       - name: Missing workspace is a sentence, not a traceback
         shell: bash
@@ -208,6 +216,31 @@ jobs:
           grep -q "demo workspace" dg3.txt
           eksb doctor | grep -q "DEMO"
           eksb validate
+
+      # the only command that destroys data, so its guards are checked, not assumed
+      - name: Deleting a workspace refuses everything but a real one
+        shell: bash
+        run: |
+          mkdir -p "not a workspace" && printf 'keep me\n' > "not a workspace/f.txt"
+          eksb workspace delete "not a workspace" --yes > d1.txt 2>&1 && exit 1
+          cat d1.txt
+          test -f "not a workspace/f.txt"
+          ! grep -q "Traceback" d1.txt
+
+          eksb workspace delete "$HOME" --yes > d2.txt 2>&1 && exit 1
+          test -d "$HOME"
+
+          eksb demo sandbox                           # the demo is never deletable
+          eksb workspace delete sandbox --yes > d3.txt 2>&1 && exit 1
+          cat d3.txt
+          eksb validate sandbox                       # still intact
+
+          eksb init disposable
+          eksb workspace delete disposable > d4.txt 2>&1 < /dev/null && exit 1
+          cat d4.txt
+          test -d disposable                          # closed stdin deletes nothing
+          eksb workspace delete disposable --yes      # only explicit consent does
+          test ! -d disposable
 
       - name: Connect prints a usable client configuration
         shell: bash

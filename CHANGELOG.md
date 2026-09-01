@@ -101,6 +101,13 @@ work history -> EKSB -> selective retrieval -> AI agent -> work
   stdin.
 - Picking a search result in the menu now shows the note itself as well as
   its provenance — `eksb get`'s guided equivalent.
+- **The guards on the one destructive command now live with the data.**
+  `refuse_if_undeletable` sits next to the demo guard in `workspace.py`, so
+  the menu, the subcommand and any later caller share one answer. It refuses
+  a filesystem root, your home directory, any directory containing it, an
+  ordinary folder that is not a workspace, and the demo — after resolving
+  symlinks, so a link is not a loophole. `--yes` skips the question and
+  nothing else.
 
 ### Changed
 

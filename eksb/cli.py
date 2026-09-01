@@ -975,11 +975,16 @@ def cmd_delete(w, assume_yes=False):
     Interactively that means typing the folder name; in a script it means
     --yes. Neither can reach the demo or a home directory.
     """
-    if w.is_demo:
-        raise UserError(t("del.nodemo"), t("del.nodemo.hint"))
+    try:
+        ws.refuse_if_undeletable(w)
+    except ws.WorkspaceError as e:
+        why = str(e).split(":", 1)[0]
+        if why == "delete-demo":
+            raise UserError(t("del.nodemo"), t("del.nodemo.hint"))
+        if why == "delete-notworkspace":
+            raise UserError(t("ws.notfound", path=w.root), t("ws.none.hint"))
+        raise UserError(t("del.refused", path=w.root))
     target = w.root
-    if target == Path.home() or target.parent == target:
-        raise UserError(t("del.refused", path=target))
 
     out()
     out(red(t("del.warn", path=target)))

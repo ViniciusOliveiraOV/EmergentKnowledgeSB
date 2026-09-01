@@ -87,8 +87,11 @@ with `eksb open`.
 
 `delete` is the destructive one. Interactively it asks you to type the folder
 name; in a script it requires `--yes`, and refuses rather than prompting into
-a closed stdin. It will not delete the demo (reset it instead) or a home
-directory.
+a closed stdin. `--yes` skips the question and nothing else: it will not
+delete the demo (reset it instead), a filesystem root, your home directory,
+any directory that contains it, or an ordinary folder that is not a
+workspace. Symlinks are resolved before any of that is decided, so pointing a
+link at a protected location does not get past it.
 
 ```
 eksb ingest PATH [--name NAME] [--dry-run] [--max-files N] [-w PATH]
