@@ -295,6 +295,8 @@ def selftest():
 
 
 if __name__ == "__main__":
+    from . import use_utf8
+    use_utf8()
     if "--selftest" in sys.argv:
         selftest()
     else:

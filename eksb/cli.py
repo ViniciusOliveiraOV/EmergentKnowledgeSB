@@ -12,7 +12,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from . import __version__, config, ingest, workspace as ws
+from . import __version__, config, ingest, use_utf8, workspace as ws
 from .i18n import LANGUAGES, get_lang, set_lang, t
 from .validate import validate
 
@@ -1398,6 +1398,7 @@ def dispatch(args):
 
 def main(argv=None):
     global DEBUG, LOGO_SHOWN
+    use_utf8()                  # before a single accented character is printed
     LOGO_SHOWN = False          # one greeting per run of the command
     args = build_parser().parse_args(argv)
     DEBUG = args.debug

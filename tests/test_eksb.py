@@ -1591,3 +1591,62 @@ def test_the_prompt_speaks_portuguese_too(isolated):
     code, out = run_tty("--lang", "pt-BR", "search", "partitioning", script=[""])
     assert code == 0
     assert "Abrir resultado [1-7, Enter para sair]" in out
+
+
+# -- encoding, on every platform ------------------------------------------
+def test_human_output_is_utf8_even_when_the_platform_says_otherwise(isolated):
+    """The Windows failure, reproduced anywhere.
+
+    A piped stdout on Windows is opened in the ANSI code page, not UTF-8, so
+    `eksb attention | tee att.txt` wrote cp1252 and grep never found the
+    Portuguese sentence. Redirecting into a cp1252 stream is the same
+    situation, and it must survive it.
+    """
+    run("demo", str(isolated / "demo"))
+    config.set_(lang="pt-BR", workspace=str(isolated / "demo"))
+    target = isolated / "att.txt"
+
+    stream = open(target, "w", encoding="cp1252", errors="strict")
+    old, sys.stdout = sys.stdout, stream
+    try:
+        code = cli.main(["attention"])
+    finally:
+        sys.stdout = old
+        stream.close()
+
+    assert code == 0
+    text = target.read_text(encoding="utf-8")       # would raise on cp1252 bytes
+    assert "Coisas que precisam da sua atenção" in text
+    assert "Sugerido por um assistente, não confirmado por você" in text
+    assert "�" not in text and "?" not in text.split("\n")[0]
+
+
+def test_use_utf8_leaves_streams_it_cannot_reconfigure_alone(monkeypatch):
+    """A StringIO has no reconfigure, and a detached stream refuses. Neither
+    may take the process down before a word is printed."""
+    import types
+    from eksb import use_utf8
+
+    class Refuses:
+        def reconfigure(self, **kw):
+            raise ValueError("underlying buffer has been detached")
+
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    monkeypatch.setattr(sys, "stderr", Refuses())
+    monkeypatch.setattr(sys, "stdin", types.SimpleNamespace())
+    use_utf8()                                       # no exception, no output
+
+
+def test_use_utf8_actually_asks_for_utf8(monkeypatch):
+    from eksb import use_utf8
+    asked = []
+
+    class Stream:
+        def reconfigure(self, **kw):
+            asked.append(kw)
+
+    monkeypatch.setattr(sys, "stdout", Stream())
+    monkeypatch.setattr(sys, "stderr", Stream())
+    monkeypatch.setattr(sys, "stdin", Stream())
+    use_utf8()
+    assert asked == [{"encoding": "utf-8"}] * 3
