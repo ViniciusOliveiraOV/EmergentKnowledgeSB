@@ -342,10 +342,13 @@ def show_provenance(w, n):
             out(f"  {bold(other.title)}  {dim(phrase(REL, r.get('rel', '?')) + ' ' + t('prov.this'))}")
 
 
-def show_attention(w, interactive=False):
+def show_attention(w, interactive=None):
+    if interactive is None:
+        interactive = sys.stdin.isatty() and sys.stdout.isatty()
     a = w.attention()
     rule(t("att.title"))
     shown = False
+    actions = []
 
     def block(key, items, fmt):
         nonlocal shown
@@ -363,20 +366,33 @@ def show_attention(w, interactive=False):
     block("att.queue", a["queue"], lambda q: q)
     block("att.open", a["open_questions"], lambda p: p[0].title)
     block("att.unendorsed", a["unendorsed"],
-          lambda p: f"{p[1][:80]}  {dim('— ' + p[0].title)}")
+          lambda p: f"{p[1][:80]}  {dim('- ' + p[0].title)}")
+    block("att.unverified", a["unverified"],
+          lambda p: f"{p[1][:80]}  {dim('- ' + p[0].title)}")
 
-    if a["unverified"]:
+    for note, _ in a["open_questions"]:
+        actions.append(("question", note, "open_question", note.title))
+    for note, text in a["unendorsed"]:
+        tag = next((tag for tag, claim in note.claims()
+                    if claim == text and tag in ws.SUGGESTED_EPISTEMIC), "")
+        actions.append(("suggestion", note, tag, text))
+    for note, text in a["unverified"]:
+        tag = next((tag for tag, claim in note.claims()
+                    if claim == text and tag in ws.OUTSIDE_EPISTEMIC), "")
+        actions.append(("outside", note, tag, text))
+
+    if interactive and actions:
         shown = True
         out()
-        out(bold(t("att.unverified") + f"  ({len(a['unverified'])})"))
-        for i, (note, text) in enumerate(a["unverified"][:15], 1):
-            number = f"{i}. " if interactive else ""
-            out(f"  {number}{text[:80]}  {dim('— ' + note.title)}")
-        if len(a["unverified"]) > 15:
-            out(dim(f"  ... +{len(a['unverified']) - 15}"))
+        out(bold(t("att.decisions") + f"  ({len(actions)})"))
+        for i, (kind, note, _tag, text) in enumerate(actions[:15], 1):
+            label = t(f"att.kind.{kind}")
+            out(f"  {i}. {label}: {text[:72]}  {dim('- ' + note.title)}")
+        if len(actions) > 15:
+            out(dim(f"  ... +{len(actions) - 15}"))
 
     block("att.superseded", a["superseded"],
-          lambda p: f"{p[0].title} {dim('→ ' + str(p[1]).strip('[]'))}")
+          lambda p: f"{p[0].title} {dim('-> ' + str(p[1]).strip('[]'))}")
     block("att.review", a["review_due"], lambda p: f"{p[0].title} {dim(p[1])}")
     block("att.warnings", a["warnings"], lambda x: dim(x))
 
@@ -384,25 +400,56 @@ def show_attention(w, interactive=False):
         out()
         out(green(t("att.clean")))
 
-    if interactive and a["unverified"]:
+    if interactive and actions:
         out()
-        raw = ask(t("att.verify.prompt", n=min(len(a["unverified"]), 15))).strip()
+        raw = ask(t("att.pick.prompt", n=min(len(actions), 15))).strip()
         if raw:
             try:
                 index = int(raw) - 1
-                if index < 0 or index >= min(len(a["unverified"]), 15):
+                if index < 0 or index >= min(len(actions), 15):
                     raise ValueError
             except ValueError:
-                out(yellow(t("att.verify.invalid")))
+                out(yellow(t("att.pick.invalid")))
                 return 0
 
-            note, text = a["unverified"][index]
-            tag = next(
-                tag for tag, claim in note.claims()
-                if claim == text and tag in ws.OUTSIDE_EPISTEMIC
-            )
-            ws.verify_claim(w, note, tag, text)
-            out(green(t("att.verify.done")))
+            action = ask(t("att.action.prompt")).strip().lower()
+            kind, note, tag, text = actions[index]
+            if action in ("", "3"):
+                out(dim(t("att.action.pending")))
+            elif action in ("1",):
+                try:
+                    if kind == "outside":
+                        ws.verify_claim(w, note, tag, text)
+                        out(green(t("att.verify.done")))
+                    elif kind == "suggestion":
+                        ws.endorse_claim(w, note, tag, text)
+                        out(green(t("att.confirm.done")))
+                    else:
+                        ws.resolve_question(w, note, accepted=True)
+                        out(green(t("att.resolve.done")))
+                except ws.WorkspaceError as e:
+                    reason, _, detail = str(e).partition(":")
+                    if reason == "demo-readonly":
+                        out(red(t("demo.readonly")))
+                        out(dim(t("demo.readonly.hint", path=Path.home() / "MyEKSB")))
+                    else:
+                        out(red(t("att.action.failed", detail=detail or reason)))
+            elif action in ("2",):
+                try:
+                    if kind == "question":
+                        ws.resolve_question(w, note, accepted=False)
+                    else:
+                        ws.reject_claim(w, note, tag, text)
+                    out(green(t("att.reject.done")))
+                except ws.WorkspaceError as e:
+                    reason, _, detail = str(e).partition(":")
+                    if reason == "demo-readonly":
+                        out(red(t("demo.readonly")))
+                        out(dim(t("demo.readonly.hint", path=Path.home() / "MyEKSB")))
+                    else:
+                        out(red(t("att.action.failed", detail=detail or reason)))
+            else:
+                out(yellow(t("att.action.invalid")))
 
     return 0
 
@@ -1420,7 +1467,7 @@ def dispatch(args):
         show_provenance(w, n)
         return 0
     if args.cmd == "attention":
-        return show_attention(resolve_ws(args.workspace))
+        return show_attention(resolve_ws(args.workspace), interactive=None)
     if args.cmd == "validate":
         return cmd_validate(args.path, args.warnings_are_errors)
     if args.cmd == "doctor":

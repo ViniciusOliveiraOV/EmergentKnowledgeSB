@@ -203,6 +203,14 @@ What a human needs to look at, derived from the notes:
 | Positions you changed | `status: superseded` |
 | Marked for review | a `review:` date in frontmatter |
 
+When `eksb attention` runs in an interactive terminal, unresolved questions,
+assistant suggestions and outside claims are also shown as one numbered
+decision list. Each item can be confirmed, rejected or left pending from that
+same screen. EKSB records the correct internal result for the item type:
+outside claims are marked verified, assistant suggestions get an explicit
+human endorsement or rejection marker, and open questions get a resolution
+marker. The original note text is preserved.
+
 ## Writing
 
 ```

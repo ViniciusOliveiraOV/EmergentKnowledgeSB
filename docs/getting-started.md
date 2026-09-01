@@ -65,6 +65,11 @@ Open questions, claims from outside that nobody has verified, suggestions you
 never confirmed, and positions you have changed. Nothing here is invented —
 every line is derived from what the notes already say.
 
+In an interactive terminal, open questions, outside claims and assistant
+suggestions can be handled right there: confirm, reject or keep pending. EKSB
+keeps the original note text and records the right internal marker for the
+kind of item you decided on.
+
 The demo is a **sandbox**. You can read it however you like, but it will
 refuse to take real work — `ingest`, `add` and `save` are turned off there,
 so your actual project cannot end up mixed into a fictional one.

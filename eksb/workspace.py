@@ -25,13 +25,25 @@ WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)")
 VERIFIED_CLAIM_RE = re.compile(
     r"<!--\s*eksb-verified-claim:\s*(sha256:[0-9a-f]{64})\s*-->"
 )
+ATTENTION_DECISION_RE = re.compile(
+    r"<!--\s*eksb-attention-decision:\s*"
+    r"(sha256:[0-9a-f]{64})\s+(confirmed|rejected|resolved)\s*-->"
+)
 OUTSIDE_EPISTEMIC = {"external_fact", "source_claim"}
+SUGGESTED_EPISTEMIC = {"assistant_hypothesis", "inference"}
 
 
 def claim_fingerprint(tag: str, text: str) -> str:
     """Stable identity for one epistemic claim without changing its authorship."""
     normalized = " ".join(text.split())
     raw = f"{tag}\0{normalized}".encode("utf-8")
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def question_fingerprint(note_id: str, title: str) -> str:
+    """Stable identity for an open question note in the attention list."""
+    normalized = " ".join(title.split())
+    raw = f"open_question\0{note_id}\0{normalized}".encode("utf-8")
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
@@ -72,6 +84,12 @@ class Note:
     def verified_claims(self) -> set[str]:
         """Human verification markers recorded without changing epistemic tags."""
         return set(VERIFIED_CLAIM_RE.findall(self.body))
+
+    @property
+    def attention_decisions(self) -> dict[str, str]:
+        """Human decisions recorded from the attention screen."""
+        return {fingerprint: action
+                for fingerprint, action in ATTENTION_DECISION_RE.findall(self.body)}
 
     def claims(self) -> list[tuple[str, str]]:
         """(epistemic tag, claim text) per bullet. Bullets may wrap lines."""
@@ -124,6 +142,70 @@ def verify_claim(w: "Workspace", note: Note, tag: str, text: str) -> bool:
         f.write(prefix + marker + "\n")
 
     # A Workspace caches parsed notes. Make this write visible immediately.
+    w._notes = None
+    return True
+
+
+def endorse_claim(w: "Workspace", note: Note, tag: str, text: str) -> bool:
+    """Record explicit human endorsement of a model-suggested claim."""
+    refuse_if_demo(w)
+
+    normalized = " ".join(text.split())
+    if tag not in SUGGESTED_EPISTEMIC:
+        raise WorkspaceError(f"endorse-not-suggestion:{tag}")
+    if (tag, normalized) not in note.claims():
+        raise WorkspaceError(f"endorse-claim-not-found:{note.id}")
+
+    fingerprint = claim_fingerprint(tag, normalized)
+    marker = f"<!-- eksb-attention-decision: {fingerprint} confirmed -->"
+    current = note.path.read_text(encoding="utf-8")
+    if marker in current:
+        return False
+
+    prefix = "" if current.endswith("\n") else "\n"
+    with note.path.open("a", encoding="utf-8") as f:
+        f.write(prefix + "\n## Human review\n\n")
+        f.write(f"- {normalized} #e/user_position\n")
+        f.write(marker + "\n")
+    w._notes = None
+    return True
+
+
+def reject_claim(w: "Workspace", note: Note, tag: str, text: str) -> bool:
+    """Record that a human rejected a pending claim without deleting it."""
+    refuse_if_demo(w)
+
+    normalized = " ".join(text.split())
+    if tag not in SUGGESTED_EPISTEMIC | OUTSIDE_EPISTEMIC:
+        raise WorkspaceError(f"reject-not-pending:{tag}")
+    if (tag, normalized) not in note.claims():
+        raise WorkspaceError(f"reject-claim-not-found:{note.id}")
+
+    return _append_attention_decision(w, note, claim_fingerprint(tag, normalized),
+                                      "rejected")
+
+
+def resolve_question(w: "Workspace", note: Note, accepted: bool = True) -> bool:
+    """Record that a human settled an open question note."""
+    refuse_if_demo(w)
+
+    if note.type != "question" and note.fm.get("epistemic_default") != "open_question":
+        raise WorkspaceError(f"resolve-not-question:{note.id}")
+    action = "resolved" if accepted else "rejected"
+    return _append_attention_decision(
+        w, note, question_fingerprint(note.id, note.title), action
+    )
+
+
+def _append_attention_decision(w: "Workspace", note: Note, fingerprint: str,
+                               action: str) -> bool:
+    marker = f"<!-- eksb-attention-decision: {fingerprint} {action} -->"
+    current = note.path.read_text(encoding="utf-8")
+    if marker in current:
+        return False
+    prefix = "" if current.endswith("\n") else "\n"
+    with note.path.open("a", encoding="utf-8") as f:
+        f.write(prefix + marker + "\n")
     w._notes = None
     return True
 
@@ -297,17 +379,21 @@ class Workspace:
         open_q, unendorsed, unverified, superseded, review = [], [], [], [], []
         for n in self.notes:
             if n.type == "question" or n.fm.get("epistemic_default") == "open_question":
-                open_q.append((n, ""))
+                fingerprint = question_fingerprint(n.id, n.title)
+                if fingerprint not in n.attention_decisions:
+                    open_q.append((n, ""))
             if n.fm.get("status") == "superseded":
                 superseded.append((n, str(n.fm.get("superseded_by") or "")))
             if n.fm.get("review"):
                 review.append((n, str(n.fm.get("review"))))
             for tag, text in n.claims():
-                if tag in ("assistant_hypothesis", "inference"):
-                    unendorsed.append((n, text))
+                fingerprint = claim_fingerprint(tag, text)
+                if tag in SUGGESTED_EPISTEMIC:
+                    if fingerprint not in n.attention_decisions:
+                        unendorsed.append((n, text))
                 elif tag in OUTSIDE_EPISTEMIC:
-                    fingerprint = claim_fingerprint(tag, text)
-                    if fingerprint not in n.verified_claims:
+                    if (fingerprint not in n.verified_claims
+                            and fingerprint not in n.attention_decisions):
                         unverified.append((n, text))
         errors, warnings, _ = validate(self.root)
         queue = self._review_queue()

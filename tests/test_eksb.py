@@ -1777,14 +1777,14 @@ def test_interactive_attention_lets_the_human_verify_an_outside_claim(isolated, 
     assert res["applied"]
 
     current = ws.Workspace(mine)
-    pending = current.attention()["unverified"]
-    choice = next(
-        str(i)
-        for i, (note, text) in enumerate(pending, 1)
-        if note.title == "Retention Window Policy" and text == claim
-    )
+    attention = current.attention()
+    actions = (attention["open_questions"] + attention["unendorsed"]
+               + attention["unverified"])
+    choice = next(str(i) for i, (note, text) in enumerate(actions, 1)
+                  if note.title == "Retention Window Policy" and text == claim)
 
-    monkeypatch.setattr(cli, "ask", lambda prompt="": choice)
+    answers = iter([choice, "1"])
+    monkeypatch.setattr(cli, "ask", lambda prompt="": next(answers))
 
     cli.show_attention(current, interactive=True)
 
@@ -1797,3 +1797,110 @@ def test_interactive_attention_lets_the_human_verify_an_outside_claim(isolated, 
     note = fresh.get("Retention Window Policy")
     assert note is not None
     assert ("source_claim", claim) in fresh.provenance(note)["claims"]
+
+
+def test_interactive_attention_lets_the_human_confirm_an_assistant_suggestion(isolated, monkeypatch):
+    """Confirm means explicit human endorsement, recorded append-only."""
+    mine = seeded(isolated)
+    claim = "Retention is 90 days on the events table."
+
+    _, res = mcp_session(mine, ("eksb_submit_candidate", {
+        "type": "concept",
+        "title": "Retention Window Policy",
+        "claims": [{
+            "text": claim,
+            "epistemic": "assistant_hypothesis",
+            "source": "src-20260826-demo-conversation-01",
+        }],
+        "sources": ["src-20260826-demo-conversation-01"],
+    }))
+    assert res["applied"]
+
+    current = ws.Workspace(mine)
+    attention = current.attention()
+    actions = attention["open_questions"] + attention["unendorsed"]
+    choice = next(str(i) for i, (note, text) in enumerate(actions, 1)
+                  if note.title == "Retention Window Policy" and text == claim)
+
+    answers = iter([choice, "1"])
+    monkeypatch.setattr(cli, "ask", lambda prompt="": next(answers))
+
+    cli.show_attention(current, interactive=True)
+
+    fresh = ws.Workspace(mine)
+    assert not any(
+        note.title == "Retention Window Policy" and text == claim
+        for note, text in fresh.attention()["unendorsed"]
+    )
+
+    note = fresh.get("Retention Window Policy")
+    assert note is not None
+    text = note.path.read_text(encoding="utf-8")
+    assert "#e/assistant_hypothesis" in text
+    assert f"- {claim} #e/user_position" in text
+    assert "eksb-attention-decision:" in text
+
+
+def test_interactive_attention_lets_the_human_reject_a_suggestion(isolated, monkeypatch):
+    """Rejecting clears attention without deleting the original suggestion."""
+    mine = seeded(isolated)
+    claim = "Retention is 90 days on the events table."
+
+    _, res = mcp_session(mine, ("eksb_submit_candidate", {
+        "type": "concept",
+        "title": "Retention Window Policy",
+        "claims": [{
+            "text": claim,
+            "epistemic": "assistant_hypothesis",
+            "source": "src-20260826-demo-conversation-01",
+        }],
+        "sources": ["src-20260826-demo-conversation-01"],
+    }))
+    assert res["applied"]
+
+    current = ws.Workspace(mine)
+    attention = current.attention()
+    actions = attention["open_questions"] + attention["unendorsed"]
+    choice = next(str(i) for i, (note, text) in enumerate(actions, 1)
+                  if note.title == "Retention Window Policy" and text == claim)
+
+    answers = iter([choice, "2"])
+    monkeypatch.setattr(cli, "ask", lambda prompt="": next(answers))
+
+    cli.show_attention(current, interactive=True)
+
+    fresh = ws.Workspace(mine)
+    assert not any(
+        note.title == "Retention Window Policy" and text == claim
+        for note, text in fresh.attention()["unendorsed"]
+    )
+
+    note = fresh.get("Retention Window Policy")
+    assert note is not None
+    text = note.path.read_text(encoding="utf-8")
+    assert "#e/assistant_hypothesis" in text
+    assert "#e/user_position" not in text
+    assert "eksb-attention-decision:" in text
+    assert "rejected" in text
+
+
+def test_interactive_attention_lets_the_human_resolve_an_open_question(isolated, monkeypatch):
+    """Open questions can be settled from the same attention screen."""
+    mine = seeded(isolated)
+    current = ws.Workspace(mine)
+    attention = current.attention()
+    note = next(n for n, _ in attention["open_questions"]
+                if n.title.startswith("Does time-range partitioning"))
+    choice = next(str(i) for i, (n, _text) in enumerate(attention["open_questions"], 1)
+                  if n is note)
+
+    answers = iter([choice, "1"])
+    monkeypatch.setattr(cli, "ask", lambda prompt="": next(answers))
+
+    cli.show_attention(current, interactive=True)
+
+    fresh = ws.Workspace(mine)
+    assert not any(n.id == note.id for n, _ in fresh.attention()["open_questions"])
+    text = Path(mine / note.rel).read_text(encoding="utf-8")
+    assert "eksb-attention-decision:" in text
+    assert "resolved" in text
