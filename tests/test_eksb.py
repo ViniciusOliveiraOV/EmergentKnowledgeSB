@@ -236,6 +236,56 @@ def feed(monkeypatch, answers):
     monkeypatch.setattr("builtins.input", scripted)
 
 
+class TTY(io.StringIO):
+    """Stdout that claims to be a terminal, so the banner is not suppressed."""
+
+    def isatty(self):
+        return True
+
+
+def run_tty(*argv, script=None):
+    """Run the CLI as if a person were watching a real terminal.
+
+    `script` answers prompts by *label* — "Learn more", not "8" — so these
+    tests keep passing when the menu is reordered. A digit or "" is sent
+    through as typed, for Back and for pressing Enter.
+    """
+    import re as _re
+    buf = TTY()
+    it = iter(script or [])
+
+    def scripted(prompt=""):
+        print(prompt, end="")
+        try:
+            want = next(it)
+        except StopIteration:
+            print()
+            raise EOFError
+        if want == "" or want.isdigit():
+            print(want)
+            return want
+        m = _re.search(rf"(\d+)\. {_re.escape(want)}", buf.getvalue())
+        assert m, f"no option {want!r} on screen:\n{buf.getvalue()[-1500:]}"
+        print(m.group(1))
+        return m.group(1)
+
+    import builtins
+    old_in, builtins.input = builtins.input, scripted
+    old, sys.stdout = sys.stdout, buf
+    try:
+        code = cli.main(list(argv))
+    except SystemExit as e:
+        code = e.code or 0
+    finally:
+        sys.stdout = old
+        builtins.input = old_in
+    return code, buf.getvalue()
+
+
+def logo_lines():
+    return cli.LOGO.strip("\n").splitlines()
+
+
 def test_first_run_onboarding_picks_language_then_demo(isolated, monkeypatch):
     feed(monkeypatch, ["2",          # Português
                        "1",          # experimentar a demonstração
@@ -1381,3 +1431,78 @@ def test_search_results_open_the_note_itself(isolated, monkeypatch):
     assert code == 0
     assert "## Definition" in out                    # the note's own body
     assert "Came from" in out                        # and its provenance
+
+
+# -- the terminal identity ------------------------------------------------
+def test_bare_interactive_eksb_shows_the_full_identity(isolated):
+    """Running `eksb` is an arrival. It should look like one."""
+    seeded(isolated)
+    config.set_(onboarded=True, lang="en")
+
+    code, out = run_tty()
+    assert code == 0
+    for line in logo_lines():
+        assert line in out, out
+    assert "Emergent Knowledge Second Brain" in out
+    assert "v0.1.0-alpha" in out
+    assert "EKSB // Workbench" in out            # the compact line, under it
+    assert "Workspace:" in out
+    assert out.index("|______|") < out.index("EKSB // Workbench")
+
+
+def test_the_logo_appears_once_per_session(isolated):
+    """Coming back from a submenu is not another arrival."""
+    seeded(isolated)
+    config.set_(onboarded=True, lang="en")
+
+    code, out = run_tty(script=["Learn more", "0", "", "Exit"])
+    assert code == 0
+    assert "How your data is stored" in out          # we really went in...
+    assert out.count("What would you like to do?") == 2   # ...and came back
+    assert out.count("|______|") == 1, out                # to no second logo
+    assert out.count("EKSB // Workbench") == 1
+
+
+def test_subcommands_never_print_the_logo(isolated):
+    """Even on a terminal: `eksb search` is an answer, not a greeting."""
+    mine = seeded(isolated)
+    for argv in (("search", "partitioning"), ("status",), ("projects",),
+                 ("validate",), ("get", "Time-Range Partitioning"),
+                 ("provenance", "Time-Range Partitioning"), ("workspace",),
+                 ("attention",), ("doctor",), ("help",)):
+        code, out = run_tty(*argv)
+        assert "|______|" not in out, (argv, out)
+        assert "EKSB // Workbench" not in out, (argv, out)
+
+
+def test_piped_output_carries_no_identity_at_all(isolated):
+    """`run` writes to a plain StringIO, which is what a pipe looks like."""
+    seeded(isolated)
+    config.set_(onboarded=True, lang="en")
+    code, out = run()                           # the menu, piped
+    assert "|______|" not in out
+    assert "EKSB // Workbench" not in out
+    code, out = run("search", "partitioning")
+    assert "|______|" not in out and "EKSB" not in out.split("\n")[0]
+
+
+def test_a_narrow_terminal_gets_the_compact_identity(isolated, monkeypatch):
+    seeded(isolated)
+    config.set_(onboarded=True, lang="en")
+    monkeypatch.setattr(cli, "term_width", lambda: 24)
+    code, out = run_tty()
+    assert "|______|" not in out
+    assert "EKSB // Workbench" in out           # still says what it is
+
+
+def test_no_color_changes_colour_and_nothing_else(isolated, monkeypatch):
+    import re as _re
+    seeded(isolated)
+    config.set_(onboarded=True, lang="en")
+
+    plain = run_tty()[1]                        # the fixture sets NO_COLOR
+    monkeypatch.setattr(cli, "COLOR", True)
+    coloured = run_tty()[1]
+
+    assert "\033[" in coloured and "\033[" not in plain
+    assert _re.sub(r"\033\[[0-9;]*m", "", coloured) == plain

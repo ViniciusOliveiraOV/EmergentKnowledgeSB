@@ -84,19 +84,27 @@ def term_width() -> int:
         return 80
 
 
+LOGO_SHOWN = False
+
+
 def banner(full: bool = False) -> None:
-    """The identity. Silent when piped; compact when narrow or routine."""
+    """The identity. Silent when piped; compact when narrow.
+
+    The logo is a greeting, so it appears once per run — returning from a
+    submenu is not an arrival.
+    """
+    global LOGO_SHOWN
     if not sys.stdout.isatty():
         return                              # never in machine-readable output
-    if full and term_width() >= LOGO_WIDTH:
+    if full and not LOGO_SHOWN and term_width() >= LOGO_WIDTH:
+        LOGO_SHOWN = True
         for line in LOGO.strip("\n").splitlines():
             out(cyan(line))
         out()
         out(bold(t("product.name")))
         out(dim(f"v{VERSION_LABEL}"))
-    else:
-        out()
-        out(bold("EKSB") + dim(" // Workbench"))
+    out()
+    out(bold("EKSB") + dim(" // Workbench"))
 
 
 def tagline() -> None:
@@ -1087,7 +1095,7 @@ def project_menu(w):
 
 def menu():
     """The main loop. Only offers what this build can actually do."""
-    banner()
+    banner(full=True)
     try:
         w = resolve_ws()
         out(dim(f"{t('ws.current')}: {w.root}"))
@@ -1378,7 +1386,8 @@ def dispatch(args):
 
 
 def main(argv=None):
-    global DEBUG
+    global DEBUG, LOGO_SHOWN
+    LOGO_SHOWN = False          # one greeting per run of the command
     args = build_parser().parse_args(argv)
     DEBUG = args.debug
     set_lang(args.lang or config.load().get("lang"))

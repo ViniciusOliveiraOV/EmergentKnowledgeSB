@@ -101,6 +101,12 @@ work history -> EKSB -> selective retrieval -> AI agent -> work
   stdin.
 - Picking a search result in the menu now shows the note itself as well as
   its provenance — `eksb get`'s guided equivalent.
+- **The ASCII identity is back on every interactive start**, not only on the
+  first run. `eksb` opens with the logo, the product name and the version,
+  then the compact `EKSB // Workbench` line and the workspace in use. It is
+  shown once per run — returning from a submenu is not another arrival — and
+  never when output is piped, on a terminal narrower than the logo, or by any
+  subcommand.
 - **`eksb help`** is a command, not an invalid choice. It used to print the
   list of commands only as part of an argparse error, and exit non-zero.
   `eksb help COMMAND` explains one — `eksb help ingest`, `eksb help workspace
