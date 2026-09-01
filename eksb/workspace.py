@@ -22,6 +22,17 @@ FOLDERS = ("_sources", "concepts", "references", "decisions", "projects",
            "dashboards", "_system", "_templates")
 
 WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)")
+VERIFIED_CLAIM_RE = re.compile(
+    r"<!--\s*eksb-verified-claim:\s*(sha256:[0-9a-f]{64})\s*-->"
+)
+OUTSIDE_EPISTEMIC = {"external_fact", "source_claim"}
+
+
+def claim_fingerprint(tag: str, text: str) -> str:
+    """Stable identity for one epistemic claim without changing its authorship."""
+    normalized = " ".join(text.split())
+    raw = f"{tag}\0{normalized}".encode("utf-8")
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
 @dataclass
@@ -57,6 +68,11 @@ class Note:
     def relations(self) -> list[dict]:
         return [r for r in (self.fm.get("relations") or []) if isinstance(r, dict)]
 
+    @property
+    def verified_claims(self) -> set[str]:
+        """Human verification markers recorded without changing epistemic tags."""
+        return set(VERIFIED_CLAIM_RE.findall(self.body))
+
     def claims(self) -> list[tuple[str, str]]:
         """(epistemic tag, claim text) per bullet. Bullets may wrap lines."""
         out, buf = [], None
@@ -78,6 +94,38 @@ class Note:
                 buf += " " + line.strip()
         flush()
         return out
+
+
+def verify_claim(w: "Workspace", note: Note, tag: str, text: str) -> bool:
+    """Record that a human checked an outside claim.
+
+    Verification is orthogonal to epistemic authorship: source_claim remains
+    source_claim and external_fact remains external_fact. The operation is
+    append-only so provenance and the original claim are untouched.
+    """
+    refuse_if_demo(w)
+
+    normalized = " ".join(text.split())
+    if tag not in OUTSIDE_EPISTEMIC:
+        raise WorkspaceError(f"verify-not-outside:{tag}")
+
+    if (tag, normalized) not in note.claims():
+        raise WorkspaceError(f"verify-claim-not-found:{note.id}")
+
+    fingerprint = claim_fingerprint(tag, normalized)
+    marker = f"<!-- eksb-verified-claim: {fingerprint} -->"
+
+    current = note.path.read_text(encoding="utf-8")
+    if marker in current:
+        return False
+
+    prefix = "" if current.endswith("\n") else "\n"
+    with note.path.open("a", encoding="utf-8") as f:
+        f.write(prefix + marker + "\n")
+
+    # A Workspace caches parsed notes. Make this write visible immediately.
+    w._notes = None
+    return True
 
 
 class WorkspaceError(Exception):
@@ -257,8 +305,10 @@ class Workspace:
             for tag, text in n.claims():
                 if tag in ("assistant_hypothesis", "inference"):
                     unendorsed.append((n, text))
-                elif tag in ("external_fact", "source_claim"):
-                    unverified.append((n, text))
+                elif tag in OUTSIDE_EPISTEMIC:
+                    fingerprint = claim_fingerprint(tag, text)
+                    if fingerprint not in n.verified_claims:
+                        unverified.append((n, text))
         errors, warnings, _ = validate(self.root)
         queue = self._review_queue()
         return {"open_questions": open_q, "unendorsed": unendorsed,

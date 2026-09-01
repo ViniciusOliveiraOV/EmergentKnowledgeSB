@@ -1664,3 +1664,136 @@ def test_delete_refuses_when_the_answer_never_comes(isolated, monkeypatch):
     assert code == 1
     assert mine.is_dir()
     assert config.load()["workspace"] == str(mine)
+
+
+# -- human verification boundary ------------------------------------------
+
+def test_attention_stops_flagging_a_human_verified_source_claim(isolated):
+    """Verification is a separate axis; source_claim remains source_claim."""
+    import hashlib
+
+    mine = seeded(isolated)
+    claim = "Retention is 90 days on the events table."
+
+    _, res = mcp_session(mine, ("eksb_submit_candidate", {
+        "type": "concept",
+        "title": "Retention Window Policy",
+        "summary": "How long event data is kept.",
+        "claims": [{
+            "text": claim,
+            "epistemic": "source_claim",
+            "source": "src-20260826-demo-conversation-01",
+        }],
+        "sources": ["src-20260826-demo-conversation-01"],
+    }))
+
+    # Simulate the durable marker that only a human verification action
+    # is allowed to write.
+    fingerprint = "sha256:" + hashlib.sha256(
+        f"source_claim\0{claim}".encode("utf-8")
+    ).hexdigest()
+
+    path = Path(res["path"])
+    original = path.read_text(encoding="utf-8")
+    path.write_text(
+        original + f"\n<!-- eksb-verified-claim: {fingerprint} -->\n",
+        encoding="utf-8",
+    )
+
+    fresh = ws.Workspace(mine)
+    assert not any(
+        n.title == "Retention Window Policy" and text == claim
+        for n, text in fresh.attention()["unverified"]
+    )
+
+    # Verification must not rewrite epistemic authorship.
+    note = fresh.get("Retention Window Policy")
+    assert note is not None
+    assert ("source_claim", claim) in fresh.provenance(note)["claims"]
+
+
+def test_human_verify_claim_is_append_only_and_preserves_epistemic(isolated):
+    """The human action records verification without promoting to user_position."""
+    mine = seeded(isolated)
+    claim = "Retention is 90 days on the events table."
+
+    _, res = mcp_session(mine, ("eksb_submit_candidate", {
+        "type": "concept",
+        "title": "Retention Window Policy",
+        "claims": [{
+            "text": claim,
+            "epistemic": "source_claim",
+            "source": "src-20260826-demo-conversation-01",
+        }],
+        "sources": ["src-20260826-demo-conversation-01"],
+    }))
+
+    w = ws.Workspace(mine)
+    note = w.get("Retention Window Policy")
+    assert note is not None
+
+    verify = getattr(ws, "verify_claim", None)
+    assert callable(verify), "human verification API is missing"
+
+    path = Path(res["path"])
+    before = path.read_text(encoding="utf-8")
+
+    verify(w, note, "source_claim", claim)
+
+    after = path.read_text(encoding="utf-8")
+
+    # Existing material is untouched: verification is append-only metadata.
+    assert before in after
+    assert "#e/source_claim" in after
+    assert "#e/user_position" not in after
+    assert "eksb-verified-claim:" in after
+
+    fresh = ws.Workspace(mine)
+    fresh_note = fresh.get("Retention Window Policy")
+    assert fresh_note is not None
+
+    assert ("source_claim", claim) in fresh.provenance(fresh_note)["claims"]
+    assert not any(
+        n.title == "Retention Window Policy" and text == claim
+        for n, text in fresh.attention()["unverified"]
+    )
+
+
+def test_interactive_attention_lets_the_human_verify_an_outside_claim(isolated, monkeypatch):
+    """Workbench attention is where the human can settle an outside claim."""
+    mine = seeded(isolated)
+    claim = "Retention is 90 days on the events table."
+
+    _, res = mcp_session(mine, ("eksb_submit_candidate", {
+        "type": "concept",
+        "title": "Retention Window Policy",
+        "claims": [{
+            "text": claim,
+            "epistemic": "source_claim",
+            "source": "src-20260826-demo-conversation-01",
+        }],
+        "sources": ["src-20260826-demo-conversation-01"],
+    }))
+    assert res["applied"]
+
+    current = ws.Workspace(mine)
+    pending = current.attention()["unverified"]
+    choice = next(
+        str(i)
+        for i, (note, text) in enumerate(pending, 1)
+        if note.title == "Retention Window Policy" and text == claim
+    )
+
+    monkeypatch.setattr(cli, "ask", lambda prompt="": choice)
+
+    cli.show_attention(current, interactive=True)
+
+    fresh = ws.Workspace(mine)
+    assert not any(
+        note.title == "Retention Window Policy" and text == claim
+        for note, text in fresh.attention()["unverified"]
+    )
+
+    note = fresh.get("Retention Window Policy")
+    assert note is not None
+    assert ("source_claim", claim) in fresh.provenance(note)["claims"]

@@ -342,7 +342,7 @@ def show_provenance(w, n):
             out(f"  {bold(other.title)}  {dim(phrase(REL, r.get('rel', '?')) + ' ' + t('prov.this'))}")
 
 
-def show_attention(w):
+def show_attention(w, interactive=False):
     a = w.attention()
     rule(t("att.title"))
     shown = False
@@ -364,8 +364,17 @@ def show_attention(w):
     block("att.open", a["open_questions"], lambda p: p[0].title)
     block("att.unendorsed", a["unendorsed"],
           lambda p: f"{p[1][:80]}  {dim('— ' + p[0].title)}")
-    block("att.unverified", a["unverified"],
-          lambda p: f"{p[1][:80]}  {dim('— ' + p[0].title)}")
+
+    if a["unverified"]:
+        shown = True
+        out()
+        out(bold(t("att.unverified") + f"  ({len(a['unverified'])})"))
+        for i, (note, text) in enumerate(a["unverified"][:15], 1):
+            number = f"{i}. " if interactive else ""
+            out(f"  {number}{text[:80]}  {dim('— ' + note.title)}")
+        if len(a["unverified"]) > 15:
+            out(dim(f"  ... +{len(a['unverified']) - 15}"))
+
     block("att.superseded", a["superseded"],
           lambda p: f"{p[0].title} {dim('→ ' + str(p[1]).strip('[]'))}")
     block("att.review", a["review_due"], lambda p: f"{p[0].title} {dim(p[1])}")
@@ -374,6 +383,27 @@ def show_attention(w):
     if not shown:
         out()
         out(green(t("att.clean")))
+
+    if interactive and a["unverified"]:
+        out()
+        raw = ask(t("att.verify.prompt", n=min(len(a["unverified"]), 15))).strip()
+        if raw:
+            try:
+                index = int(raw) - 1
+                if index < 0 or index >= min(len(a["unverified"]), 15):
+                    raise ValueError
+            except ValueError:
+                out(yellow(t("att.verify.invalid")))
+                return 0
+
+            note, text = a["unverified"][index]
+            tag = next(
+                tag for tag, claim in note.claims()
+                if claim == text and tag in ws.OUTSIDE_EPISTEMIC
+            )
+            ws.verify_claim(w, note, tag, text)
+            out(green(t("att.verify.done")))
+
     return 0
 
 
@@ -1184,7 +1214,7 @@ def dispatch_menu(pick, w):
         demo_guard(w)            # refuse up front, not after three questions
         add_menu(w)
     elif pick == "attention":
-        show_attention(w)
+        show_attention(w, interactive=True)
     elif pick == "provenance":
         q = ask(t("search.prompt"))
         hits = w.search(q)
