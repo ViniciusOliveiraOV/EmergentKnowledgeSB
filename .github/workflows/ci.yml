@@ -262,3 +262,83 @@ jobs:
           eksb connect --json -w "ws test/Meu Espaço EKSB ✓" > cfg.json
           cat cfg.json
           python -c "import json,sys; c=json.load(open('cfg.json'))['mcpServers']['eksb']; assert c['args'][:3]==['-m','eksb','mcp'], c"
+
+  # Does EKSB install and work on a distribution that is not Ubuntu? Much
+  # lighter than the matrix above on purpose: install, demo, ingest, search,
+  # validate. Runs in containers on an Ubuntu runner rather than with
+  # `container:`, because actions/checkout needs a glibc Node and Alpine has
+  # none — checking out on the host sidesteps that entirely.
+  distro:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    needs: [test, cli]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian 12 · glibc
+            image: debian:12
+            setup: apt-get update -qq && apt-get install -y -qq python3 python3-pip
+            py: python3
+          - name: Ubuntu 24.04 · glibc
+            image: ubuntu:24.04
+            setup: apt-get update -qq && apt-get install -y -qq python3 python3-pip
+            py: python3
+          - name: Linux Mint 22 · glibc
+            image: linuxmintd/mint22-amd64
+            setup: apt-get update -qq && apt-get install -y -qq python3 python3-pip
+            py: python3
+          - name: Fedora 41 · glibc
+            image: fedora:41
+            setup: dnf install -y -q python3 python3-pip
+            py: python3
+          - name: Rocky Linux 9 · glibc
+            image: quay.io/rockylinux/rockylinux:9
+            setup: dnf install -y -q python3.11 python3.11-pip
+            py: python3.11
+          - name: openSUSE Tumbleweed · glibc
+            image: opensuse/tumbleweed
+            setup: zypper -n -q install python3 python3-pip
+            py: python3
+          - name: Arch Linux · glibc
+            image: archlinux:latest
+            setup: pacman -Sy --noconfirm --quiet python python-pip
+            py: python
+          # Manjaro needs the full -Syu: this image ships a glibc older than
+          # the python in the repos, and a partial upgrade leaves python broken
+          - name: Manjaro · glibc
+            image: manjarolinux/base
+            setup: pacman -Syu --noconfirm --quiet python python-pip
+            py: python
+          - name: Void Linux · glibc
+            image: ghcr.io/void-linux/void-glibc:latest
+            setup: xbps-install -Suy xbps || true; xbps-install -Sy python3 python3-pip
+            py: python3
+          - name: Void Linux · musl
+            image: ghcr.io/void-linux/void-musl:latest
+            setup: xbps-install -Suy xbps || true; xbps-install -Sy python3 python3-pip
+            py: python3
+          - name: Alpine 3.20 · musl
+            image: alpine:3.20
+            setup: apk add --no-cache python3 py3-pip
+            py: python3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install and use EKSB on ${{ matrix.name }}
+        env:
+          IMAGE: ${{ matrix.image }}
+          SETUP: ${{ matrix.setup }}
+          PY: ${{ matrix.py }}
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -e SETUP -e PY "$IMAGE" sh -c '
+            set -e
+            sh -c "$SETUP"
+            mkdir -p /work/.github && cd /work
+            cp -r /src/eksb /src/pyproject.toml /src/README.md /src/LICENSE /src/VERSION .
+            cp /src/.github/distro-smoke.py .github/
+            # PEP 668 marks most of these installs as externally managed
+            "$PY" -m pip install --break-system-packages . || "$PY" -m pip install .
+            "$PY" .github/distro-smoke.py
+          '

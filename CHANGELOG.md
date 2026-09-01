@@ -64,6 +64,11 @@ work history -> EKSB -> selective retrieval -> AI agent -> work
 - CI on Ubuntu, Windows and macOS across Python 3.11–3.13, covering install,
   the full command surface, both languages, Unicode paths, and detection of
   edited raw history.
+- **A Linux distribution smoke matrix** — Debian, Ubuntu, Mint, Fedora,
+  Rocky, openSUSE Tumbleweed, Arch, Manjaro, Void (glibc and musl) and
+  Alpine. Install, demo, ingest, search, validate on each distro's own
+  Python and libc, so a packaging problem names the distro that has it.
+  See [docs/testing/linux-distros.md](docs/testing/linux-distros.md).
 - Documentation: getting started, CLI reference, workspace format, relations,
   development, a Void Linux smoke test, and integration pages for Obsidian
   and AI agents.
